@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         【减负社区】【超星学习通小助手】【完全免费】视频-章节测试|自动挂机|防清进度|不占资源
 // @namespace    unrival
-// @version      5.0.2
+// @version      5.0.3
 // @homepageURL  https://github.com/LazyKing11244/chaoxing-helper
 // @supportURL   https://github.com/LazyKing11244/chaoxing-helper/issues
 // @updateURL    https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
 // @downloadURL  https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
-// @description  2026 重构维护版：修复正确率计算与音频汇报 Bug、移除冗余体积与远端裸 IP、支持多题库聚合与 AI 大模型自动答题、含填空题支持。
+// @description  2026 重构维护版：优化单选多选判断精准匹配算法、修复测验自动保存卡死与网络超时线程泄漏、支持多空填空与跨域兼容增强。
 // @author       unrival
 // @run-at       document-end
 // @storageName  unrivalxxt
@@ -352,7 +352,7 @@
             <div class="col-md-6 col-md-offset-3">
                 <div class="header clearfix">
                     <h3 class="text-muted" style="margin-top: 20px;margin-bottom: 0;float: left;">
-                        <a href="https://github.com/LazyKing11244/chaoxing-helper" target="_blank" style="color: #337ab7; text-decoration: none;">学习通小助手 v5.0.2 (2026维护版)</a>
+                        <a href="https://github.com/LazyKing11244/chaoxing-helper" target="_blank" style="color: #337ab7; text-decoration: none;">学习通小助手 v5.0.3 (2026维护版)</a>
                     </h3>
                 </div>
                 <hr style="margin-top: 10px;margin-bottom: 20px;">
@@ -360,11 +360,11 @@
                 <div class="panel panel-info" id='remarks'>
                     <div class="panel-heading">脚本维护说明</div>
                     <div class="panel-body">
-                        <p><strong>超星学习通小助手 2026 重构维护版</strong></p>
-                        <p>1. 修复章节测试正确率整数截断公式与音频任务点 rt 参数覆盖 Bug；</p>
-                        <p>2. 移除冗余巨型 Base64 图片体积与远端裸 IP 依赖，MD5 纯本地秒级生成；</p>
-                        <p>3. 升级聚合题库系统：支持一之哥哥题库、自定义备用题库 API 以及 AI 大模型（DeepSeek / OpenAI 兼容）智能降级答题；</p>
-                        <p>4. 新增填空题自动填入与选项字母精准匹配支持。</p>
+                        <p><strong>超星学习通小助手 2026 重构维护版 (v5.0.3)</strong></p>
+                        <p>1. 重构题库答案匹配引擎：深度优化单选/多选/判断题文本与选项字母匹配，杜绝字符误判与长短选项误包含；</p>
+                        <p>2. 修复测验自动保存卡死与提交作用域隔离 Bug，增加多重完成延时兜底机制；</p>
+                        <p>3. 修复视频/任务详情网络异常与超时导致 busyThread 线程死锁，增强跳章健壮性；</p>
+                        <p>4. 填空题增强多空智能拆分匹配（支持 ###、===、# 等分隔符）。</p>
                     </div>
                 </div>
 
@@ -977,8 +977,18 @@
                 return;
             }
             let missionli = missionList;
-            // 修复 missionList 判空逻辑
+            // 修复 missionList 判空与空任务跳章逻辑
             if (Object.keys(missionli).length === 0) {
+                if (busyThread <= 0) {
+                    let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
+                    if (curJump != 2) {
+                        _w.top.jump = true;
+                        logs.addLog('本页无有效任务点，5秒后自动进入下一章', 'green');
+                    } else {
+                        logs.addLog('本页无有效任务点，用户设置为不跳转，脚本已就绪', 'green');
+                    }
+                    return;
+                }
                 setTimeout(loopjob, 500);
                 return;
             }
@@ -1137,8 +1147,13 @@
                     } catch (e) { }
                 },
                 onerror: function (err) {
+                    busyThread -= 1;
                     console.log(err);
                     logs.addLog('获取任务详情失败：' + (err.error || '网络错误'), 'red');
+                },
+                ontimeout: function () {
+                    busyThread -= 1;
+                    logs.addLog('获取任务详情超时，已自动跳过该任务', 'red');
                 }
             });
         },
@@ -1186,7 +1201,8 @@
             }
 
             // 区分音频与视频，并确保音频 rt 参数不被覆盖为 0.9
-            const isAudio = (item['module'] && item['module'].includes('audio'));
+            const mod = (item['module'] || (item['property'] && item['property']['module']) || '').toLowerCase();
+            const isAudio = mod.includes('audio') || mod.includes('mp3') || mod.includes('m4a');
             let dtype = isAudio ? 'Audio' : 'Video';
             let rt = isAudio ? '' : (missionList['m' + item['jobid']]['rt'] || '0.9');
 
@@ -1254,6 +1270,7 @@
                                 'Content-Type': 'application/json'
                             },
                             url: reportsUrl,
+                            timeout: 15000,
                             onload: function (res) {
                                 try {
                                     let today = new Date(),
@@ -1319,10 +1336,15 @@
                                 }
                             },
                             onerror: function (err) {
+                                busyThread -= 1;
                                 console.log(err);
                                 logs.addLog('观看任务汇报失败：' + (err.error || '网络错误'), 'red');
                                 missionList['m' + item['jobid']]['running'] = false;
                                 clearInterval(loop);
+                            },
+                            ontimeout: function () {
+                                busyThread -= 1;
+                                logs.addLog('观看任务汇报超时，正在等待下次重试...', 'orange');
                             }
                         });
                     }
@@ -1371,6 +1393,7 @@
             }, parseInt(Math.random() * 2000 + 4000, 10));
         },
         doWork = (item) => {
+            _w.top.unrivalWorkDone = false;
             missionList['m' + item['jobid']]['running'] = true;
             logs.addLog('开始刷章节测试：' + item['name']);
             logs.addLog('您设置的答题合格正确率为：' + String(accuracy) + '%，只有达到此标准才会自动提交', 'blue');
@@ -1390,7 +1413,7 @@
             }, 100);
 
             let checkcross = setInterval(function () {
-                if (_w.top.unrivalWorkDone == false) {
+                if (_w.top.unrivalWorkDone == true) {
                     clearInterval(checkcross);
                     return;
                 }
@@ -1460,7 +1483,7 @@
                     'type': 'work',
                     'workid': item['property']['workid'],
                     'jobid': item['jobid'],
-                    'name': item['property']['title'],
+                    'name': item['property']['title'] || item['property']['name'] || '章节测试',
                     'enc': item['enc'],
                     'done': false,
                     'running': false
@@ -1588,11 +1611,14 @@
                     }
                 }
             } else {
-                let h5s = _d.getElementsByClassName('ncells')[0].getElementsByTagName('h5');
-                for (let i = 0, l = h5s.length; i < l; i++) {
-                    if (h5s[i].getAttribute('onclick') == null) {
-                        h5s[i].setAttribute('onclick', "getTeacherAjax('" + courseId + "','" + classId +
-                            "','" + h5s[i].getAttribute('id').replace('cur', '') + "');");
+                let ncells = _d.getElementsByClassName('ncells');
+                if (ncells && ncells.length > 0) {
+                    let h5s = ncells[0].getElementsByTagName('h5');
+                    for (let i = 0, l = h5s.length; i < l; i++) {
+                        if (h5s[i].getAttribute('onclick') == null) {
+                            h5s[i].setAttribute('onclick', "getTeacherAjax('" + courseId + "','" + classId +
+                                "','" + h5s[i].getAttribute('id').replace('cur', '') + "');");
+                        }
                     }
                 }
             }
@@ -1613,8 +1639,10 @@
                             if (curJump == 1) { // 遍历模式
                                 if (getQueryVariable('mooc2') == '1') {
                                     but = _d.getElementsByClassName('jb_btn jb_btn_92 fs14 prev_next next');
+                                    if (!but || but.length === 0) but = _d.getElementsByClassName('jb_btn next');
                                 } else {
                                     but = _d.getElementsByClassName('orientationright');
+                                    if (!but || but.length === 0) but = _d.querySelectorAll('.nextchapter, .next-chapter, a.next, [title="下一节"], [title="下一章"]');
                                 }
                                 try {
                                     setTimeout(function () {
@@ -1735,8 +1763,9 @@
         _w.top.unrivalWorkDone = false;
         _w.aalert = _w.alert;
         _w.alert = (msg) => {
-            if (msg == '保存成功') {
+            if (msg == '保存成功' || (typeof msg === 'string' && msg.includes('保存成功'))) {
                 _w.top.unrivalDoneWorkId = getQueryVariable('workId');
+                _w.top.unrivalWorkDone = true;
                 return;
             }
             _w.aalert(msg);
@@ -1760,8 +1789,14 @@
             if (!titleElement) continue;
 
             let question = titleElement.innerHTML;
-            question = handleImgs(question).replace(/(<([^>]+)>)/ig, '').replace(/[0-9]{1,3}\.\[(.*?)\]/ig, '').replaceAll('\n',
-                '').replace(/^\s+/ig, '').replace(/\s+$/ig, '');
+            question = handleImgs(question)
+                .replace(/(<([^>]+)>)/ig, '')
+                .replace(/^\s*\d+[\.、\s]*/ig, '')
+                .replace(/[【\[\(](?:单选题|多选题|填空题|判断题|问答题)[】\]\)]/ig, '')
+                .replace(/[0-9]{1,3}\.\[(.*?)\]/ig, '')
+                .replace(/[\(（]\s*\d+(?:\.\d+)?\s*分\s*[\)）]/ig, '')
+                .replaceAll('\n', '')
+                .replace(/^\s+/ig, '').replace(/\s+$/ig, '');
 
             for (let z = 0, k = idElements.length; z < k; z++) {
                 try {
@@ -1812,21 +1847,22 @@
                     let answersElements = answerListContainer.getElementsByTagName('li');
                     for (let x = 0, j = answersElements.length; x < j; x++) {
                         let optionE = answersElements[x],
+                            emE = optionE.getElementsByTagName('em')[0],
+                            optionValue = emE ? (emE.getAttribute('id-param') || emE.innerText || emE.textContent || '').trim() : '',
                             optionTextE = trim(optionE.innerHTML.replace(/(^\s*)|(\s*$)/g, "")),
-                            optionText = optionTextE.slice(1).replace(/(^\s*)|(\s*$)/g, ""),
-                            optionValue = optionTextE.slice(0, 1),
                             optionId = optionE.getAttribute('id-param');
-                        if (optionText == '') {
-                            break;
+                        if (!optionValue) {
+                            optionValue = optionTextE.slice(0, 1).toUpperCase();
+                        }
+                        let optionText = optionTextE.replace(/^[A-Za-z][\.\、\:\s]*/, '').replace(/(^\s*)|(\s*$)/g, "");
+                        if (!optionText) {
+                            optionText = optionValue;
                         }
                         optionList[optionText] = {
                             'id': optionId,
                             'value': optionValue
                         };
                         optionList.length++;
-                    }
-                    if (answersElements.length != optionList.length) {
-                        continue;
                     }
                 }
             }
@@ -1921,7 +1957,7 @@
                     '- 单选题：仅输出对应选项字母（如 A）或文本；\n' +
                     '- 多选题：仅输出所有正确选项字母组合（如 ACD）或文本；\n' +
                     '- 判断题：仅输出“正确”或“错误”；\n' +
-                    '- 填空题：仅输出填空内容。';
+                    '- 填空题：仅输出填空内容，多空时请用“###”分隔（如：答案一###答案二）。';
 
                 let reqBody = {
                     model: aiModel,
@@ -1948,10 +1984,11 @@
                     onload: function (res) {
                         try {
                             let json = JSON.parse(res.responseText);
-                            let content = json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
+                            let msg = json.choices && json.choices[0] && json.choices[0].message;
+                            let content = (msg && (msg.content || msg.reasoning_content)) || '';
                             if (content) {
                                 content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
-                                content = content.replace(/^(答|答案|标准答案)[:：]\s*/i, '').trim();
+                                content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
                                 callback({ code: 1, data: content, from: 'DeepSeek (' + aiModel + ')' });
                                 return;
                             }
@@ -2084,16 +2121,14 @@
                     switch (quu['type']) {
                         case '判断题':
                             (function () {
-                                let resStr = String(result).trim();
+                                let s = String(result).trim();
+                                s = s.replace(/^(?:答案|判断)[:：\s]*/i, '').replace(/[*_`【】\(\)\[\]"']/g, '').trim();
+                                let lower = s.toLowerCase();
                                 let answer = '';
-                                if (/[对√正确是truet1]/i.test(resStr) && !/[错×错误否falsef0]/i.test(resStr)) {
-                                    answer = 'true';
-                                } else if (/[错×错误否falsef0]/i.test(resStr)) {
+                                if (/^(?:错|×|错误|否|false|f|0|不对|不正确|不是)/i.test(lower) || /不正确|错误|为错|为假|false/i.test(lower)) {
                                     answer = 'false';
-                                } else if ('正确是对√Tri'.indexOf(resStr) >= 0) {
+                                } else if (/^(?:对|√|正确|是|true|t|1)/i.test(lower) || /正确|为对|为真|true/i.test(lower)) {
                                     answer = 'true';
-                                } else if ('错误否错×Fwr'.indexOf(resStr) >= 0) {
-                                    answer = 'false';
                                 }
 
                                 if (answer) {
@@ -2106,6 +2141,23 @@
                                         }
                                     }
                                 }
+
+                                // 支持判断题输出 A / B 选项字母
+                                let letterMatch = s.match(/^([A-Ba-b])(?:\.|\、|\:|\s|$)/);
+                                if (letterMatch) {
+                                    let targetLtr = letterMatch[1].toUpperCase();
+                                    for (let u = 0, k = choiceEs.length; u < k; u++) {
+                                        let em = choiceEs[u].getElementsByTagName('em');
+                                        if (em.length < 1) continue;
+                                        let emLtr = (em[0].getAttribute('id-param') || em[0].innerText || '').trim().toUpperCase();
+                                        if (emLtr == targetLtr && choiceEs[u].getAttribute('id-param') == cleanQId) {
+                                            choiceEs[u].click();
+                                            questionNum -= 1;
+                                            return;
+                                        }
+                                    }
+                                }
+
                                 if (curRandomDo == 1 && curAccuracy < 100) {
                                     _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到判断结果，自动选【错】';
                                     for (let u = 0, k = choiceEs.length; u < k; u++) {
@@ -2138,8 +2190,10 @@
                                 }
 
                                 let cleanRes = String(result).trim();
+                                let s = cleanRes.replace(/^(?:答案|正确答案|选项)[:：\s]*/i, '').replace(/[*_`【】\(\)\[\]"']/g, '').trim();
+
                                 // 1. 优先尝试选项字母匹配（如 "A", "A.", "选项A", "A、"）
-                                let letterMatch = cleanRes.match(/^(?:选项)?\s*([A-Za-z])(?:\.|\、|\s|$)/i);
+                                let letterMatch = s.match(/^([A-Za-z])(?:\.|\、|\:|\s|$)/i);
                                 if (letterMatch) {
                                     let targetLetter = letterMatch[1].toUpperCase();
                                     if (clickOptionByLetter(targetLetter)) {
@@ -2148,12 +2202,12 @@
                                     }
                                 }
 
-                                // 2. 文本匹配（清洗空白符和HTML特殊字符）
-                                let cleanResText = cleanText(cleanRes);
+                                // 2. 全文本精准相等匹配（无标点空格降噪后）
+                                let cleanResText = cleanText(s);
                                 for (let option in quu['options']) {
                                     if (option === 'length') continue;
                                     let cleanOpt = cleanText(option);
-                                    if (cleanOpt && cleanResText && (cleanOpt == cleanResText || cleanOpt.includes(cleanResText) || cleanResText.includes(cleanOpt))) {
+                                    if (cleanOpt && cleanResText && cleanOpt === cleanResText) {
                                         if (clickOptionByLetter(quu['options'][option]['value'])) {
                                             questionNum -= 1;
                                             return;
@@ -2161,7 +2215,19 @@
                                     }
                                 }
 
-                                // 3. 盲猜
+                                // 3. 文本长子串包含匹配（按选项长度从长到短优先匹配，且要求子串长 >= 2）
+                                let sortedOptions = Object.keys(quu['options']).filter(k => k !== 'length').sort((a, b) => b.length - a.length);
+                                for (let option of sortedOptions) {
+                                    let cleanOpt = cleanText(option);
+                                    if (cleanOpt && cleanResText && cleanOpt.length >= 2 && (cleanOpt.includes(cleanResText) || cleanResText.includes(cleanOpt))) {
+                                        if (clickOptionByLetter(quu['options'][option]['value'])) {
+                                            questionNum -= 1;
+                                            return;
+                                        }
+                                    }
+                                }
+
+                                // 4. 盲猜
                                 if (curRandomDo == 1 && curAccuracy < 100) {
                                     _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到正确答案，自动选【B】';
                                     clickOptionByLetter('B');
@@ -2186,40 +2252,50 @@
                                     return false;
                                 }
 
-                                let hasAnswer = false;
-                                // 1. 若返回为数组形式，提取选项字母
+                                let matchedLetters = new Set();
+                                // 1. 若返回为数组形式
                                 if (Array.isArray(result)) {
-                                    let letters = result.map(s => String(s).trim().toUpperCase()).filter(s => /^[A-Z]$/.test(s));
-                                    if (letters.length > 0) {
-                                        letters.forEach(ltr => {
-                                            if (clickOptionByLetter(ltr)) hasAnswer = true;
-                                        });
+                                    for (let item of result) {
+                                        let itemStr = String(item).trim().replace(/[*_`【】\(\)\[\]"']/g, '').trim();
+                                        if (/^[A-Za-z]$/.test(itemStr)) {
+                                            matchedLetters.add(itemStr.toUpperCase());
+                                        } else {
+                                            let cleanItem = cleanText(itemStr);
+                                            for (let option in quu['options']) {
+                                                if (option === 'length') continue;
+                                                let cleanOpt = cleanText(option);
+                                                if (cleanOpt && cleanItem && (cleanOpt === cleanItem || (cleanOpt.length >= 2 && cleanItem.includes(cleanOpt)))) {
+                                                    matchedLetters.add(quu['options'][option]['value']);
+                                                }
+                                            }
+                                        }
                                     }
                                 } else if (typeof result === 'string') {
-                                    let s = result.trim();
-                                    // 2. 判断是否纯为选项字母组合（如 "ACD", "A,C,D", "A#C#D", "A C D"）
+                                    let s = result.trim().replace(/^(?:答案|正确答案|选项)[:：\s]*/i, '').replace(/[*_`【】\(\)\[\]"']/g, '').trim();
+                                    // 2. 判断是否为选项字母组合（如 "ACD", "A,C,D", "A#C#D", "A C D", "A、C、D"）
                                     if (/^[A-Za-z\s,#、|&;]+$/.test(s)) {
                                         let letters = s.toUpperCase().match(/[A-Z]/g);
                                         if (letters && letters.length > 0) {
-                                            letters.forEach(ltr => {
-                                                if (clickOptionByLetter(ltr)) hasAnswer = true;
-                                            });
+                                            letters.forEach(ltr => matchedLetters.add(ltr));
+                                        }
+                                    } else {
+                                        // 3. 文本长匹配
+                                        let answerData = cleanText(s);
+                                        let sortedOptions = Object.keys(quu['options']).filter(k => k !== 'length').sort((a, b) => b.length - a.length);
+                                        for (let option of sortedOptions) {
+                                            let optTextClean = cleanText(option);
+                                            if (optTextClean && answerData && (optTextClean.length >= 2 && (answerData.includes(optTextClean) || optTextClean.includes(answerData)))) {
+                                                matchedLetters.add(quu['options'][option]['value']);
+                                            }
                                         }
                                     }
                                 }
 
-                                // 3. 文本包含匹配
-                                if (!hasAnswer) {
-                                    let answerData = cleanText(String(result));
-                                    for (let option in quu['options']) {
-                                        if (option === 'length') continue;
-                                        let optTextClean = cleanText(option);
-                                        if (optTextClean && answerData && (answerData.includes(optTextClean) || optTextClean.includes(answerData))) {
-                                            if (clickOptionByLetter(quu['options'][option]['value'])) {
-                                                hasAnswer = true;
-                                            }
-                                        }
-                                    }
+                                let hasAnswer = false;
+                                if (matchedLetters.size > 0) {
+                                    matchedLetters.forEach(ltr => {
+                                        if (clickOptionByLetter(ltr)) hasAnswer = true;
+                                    });
                                 }
 
                                 if (hasAnswer) {
@@ -2255,18 +2331,22 @@
                                     if (Array.isArray(result)) {
                                         answers = result;
                                     } else if (typeof result === 'string') {
-                                        if (result.includes('===')) answers = result.split('===');
-                                        else if (result.includes('#')) answers = result.split('#');
-                                        else if (result.includes('|')) answers = result.split('|');
-                                        else if (result.includes('\n')) answers = result.split('\n');
-                                        else answers = [result];
+                                        let s = result.trim().replace(/^(?:答案|正确答案)[:：\s]*/i, '');
+                                        if (s.includes('###')) answers = s.split('###');
+                                        else if (s.includes('===')) answers = s.split('===');
+                                        else if (s.includes('#')) answers = s.split('#');
+                                        else if (s.includes('|')) answers = s.split('|');
+                                        else if (s.includes('；')) answers = s.split('；');
+                                        else if (s.includes(';')) answers = s.split(';');
+                                        else if (s.includes('\n')) answers = s.split('\n');
+                                        else answers = [s];
                                     } else {
                                         answers = [String(result)];
                                     }
                                     let filledCount = 0;
                                     for (let b = 0; b < inputEs.length; b++) {
                                         let ans = (answers[b] !== undefined ? answers[b] : answers[0]) || '';
-                                        ans = trim(ans).replace(/^(答案[:：]|\d+[\.、])/g, '').trim();
+                                        ans = trim(ans).replace(/^(答案[:：]|\d+[\.、])/g, '').replace(/[*_`]/g, '').trim();
                                         inputEs[b].value = ans;
                                         inputEs[b].dispatchEvent(new Event('input', { bubbles: true }));
                                         inputEs[b].dispatchEvent(new Event('change', { bubbles: true }));
@@ -2308,9 +2388,23 @@
                 _w.top.unrivalDoneWorkId = getQueryVariable('workId');
                 _w.top.unrivalWorkInfo = '正确率符合标准 (' + currentAccuracy + '% >= ' + curAccuracy + '%)，已提交测试';
                 setTimeout(function () {
-                    if (typeof submitCheckTimes === 'function') submitCheckTimes();
-                    if (typeof escapeBlank === 'function') escapeBlank();
-                    if (typeof submitAction === 'function') submitAction();
+                    let fnSubmitCheck = (typeof _w.submitCheckTimes === 'function') ? _w.submitCheckTimes : (typeof submitCheckTimes === 'function' ? submitCheckTimes : null);
+                    let fnEscapeBlank = (typeof _w.escapeBlank === 'function') ? _w.escapeBlank : (typeof escapeBlank === 'function' ? escapeBlank : null);
+                    let fnSubmitAction = (typeof _w.submitAction === 'function') ? _w.submitAction : (typeof submitAction === 'function' ? submitAction : null);
+
+                    if (fnSubmitCheck) fnSubmitCheck();
+                    if (fnEscapeBlank) fnEscapeBlank();
+                    if (fnSubmitAction) {
+                        fnSubmitAction();
+                    } else if (_d.getElementById('form1') && typeof _d.getElementById('form1').submit === 'function') {
+                        _d.getElementById('form1').submit();
+                    } else if (typeof _w.saveWork === 'function') {
+                        _w.saveWork(2);
+                    }
+                    // 提交后延时兜底通知主面板完成，防止超星未跳转导致卡死
+                    setTimeout(function () {
+                        _w.top.unrivalWorkDone = true;
+                    }, 6000);
                 }, parseInt(Math.random() * 2000 + 3000, 10));
             } else if (_w.top.unrivalAutoSave == '1') {
                 _w.top.unrivalWorkInfo = '正确率(' + currentAccuracy + '%)未达提交标准或未开启自动提交，已自动保存答案';
@@ -2318,7 +2412,13 @@
                     _w.top.unrivalDoneWorkId = getQueryVariable('workId');
                     if (typeof _w.noSubmit === 'function') {
                         _w.noSubmit();
+                    } else if (typeof _w.saveWork === 'function') {
+                        _w.saveWork(1);
                     }
+                    // 保存后兜底通知主面板收起测验窗口
+                    setTimeout(function () {
+                        _w.top.unrivalWorkDone = true;
+                    }, 3000);
                 }, 2000);
             } else {
                 _w.top.unrivalWorkInfo = '当前正确率：' + currentAccuracy + '%，用户设置为不自动保存，请手动处理作业';
