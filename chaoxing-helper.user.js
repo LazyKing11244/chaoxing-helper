@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         【减负社区】【超星学习通小助手】【完全免费】视频-章节测试|自动挂机|防清进度|不占资源
 // @namespace    unrival
-// @version      5.0.0
+// @version      5.0.1
 // @homepageURL  https://github.com/LazyKing11244/chaoxing-helper
 // @supportURL   https://github.com/LazyKing11244/chaoxing-helper/issues
 // @updateURL    https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
@@ -352,7 +352,7 @@
             <div class="col-md-6 col-md-offset-3">
                 <div class="header clearfix">
                     <h3 class="text-muted" style="margin-top: 20px;margin-bottom: 0;float: left;">
-                        <a href="https://scriptcat.org/script-show-page/379" target="_blank" style="color: #337ab7; text-decoration: none;">学习通小助手 v5.0.0 (2026维护版)</a>
+                        <a href="https://github.com/LazyKing11244/chaoxing-helper" target="_blank" style="color: #337ab7; text-decoration: none;">学习通小助手 v5.0.1 (2026维护版)</a>
                     </h3>
                 </div>
                 <hr style="margin-top: 10px;margin-bottom: 20px;">
