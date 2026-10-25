@@ -977,18 +977,8 @@
                 return;
             }
             let missionli = missionList;
-            // 修复 missionList 判空与空任务跳章逻辑
+            // 修复 missionList 判空逻辑
             if (Object.keys(missionli).length === 0) {
-                if (busyThread <= 0) {
-                    let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
-                    if (curJump != 2) {
-                        _w.top.jump = true;
-                        logs.addLog('本页无有效任务点，5秒后自动进入下一章', 'green');
-                    } else {
-                        logs.addLog('本页无有效任务点，用户设置为不跳转，脚本已就绪', 'green');
-                    }
-                    return;
-                }
                 setTimeout(loopjob, 500);
                 return;
             }
@@ -1109,6 +1099,7 @@
                     'Sec-Fetch-Site': 'same-origin'
                 },
                 url: statusUrl,
+                timeout: 10000,
                 onload: function (res) {
                     try {
                         busyThread -= 1;
@@ -1393,7 +1384,6 @@
             }, parseInt(Math.random() * 2000 + 4000, 10));
         },
         doWork = (item) => {
-            _w.top.unrivalWorkDone = false;
             missionList['m' + item['jobid']]['running'] = true;
             logs.addLog('开始刷章节测试：' + item['name']);
             logs.addLog('您设置的答题合格正确率为：' + String(accuracy) + '%，只有达到此标准才会自动提交', 'blue');
@@ -1413,7 +1403,7 @@
             }, 100);
 
             let checkcross = setInterval(function () {
-                if (_w.top.unrivalWorkDone == true) {
+                if (_w.top.unrivalWorkDone == false) {
                     clearInterval(checkcross);
                     return;
                 }
@@ -1791,8 +1781,7 @@
             let question = titleElement.innerHTML;
             question = handleImgs(question)
                 .replace(/(<([^>]+)>)/ig, '')
-                .replace(/^\s*\d+[\.、\s]*/ig, '')
-                .replace(/[【\[\(](?:单选题|多选题|填空题|判断题|问答题)[】\]\)]/ig, '')
+                .replace(/[0-9]{1,3}\.[\[【](.*?)[\]】]/ig, '')
                 .replace(/[0-9]{1,3}\.\[(.*?)\]/ig, '')
                 .replace(/[\(（]\s*\d+(?:\.\d+)?\s*分\s*[\)）]/ig, '')
                 .replaceAll('\n', '')
@@ -1985,7 +1974,7 @@
                         try {
                             let json = JSON.parse(res.responseText);
                             let msg = json.choices && json.choices[0] && json.choices[0].message;
-                            let content = (msg && (msg.content || msg.reasoning_content)) || '';
+                            let content = (msg && msg.content) || '';
                             if (content) {
                                 content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
                                 content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
@@ -2332,14 +2321,16 @@
                                         answers = result;
                                     } else if (typeof result === 'string') {
                                         let s = result.trim().replace(/^(?:答案|正确答案)[:：\s]*/i, '');
-                                        if (s.includes('###')) answers = s.split('###');
-                                        else if (s.includes('===')) answers = s.split('===');
-                                        else if (s.includes('#')) answers = s.split('#');
-                                        else if (s.includes('|')) answers = s.split('|');
-                                        else if (s.includes('；')) answers = s.split('；');
-                                        else if (s.includes(';')) answers = s.split(';');
-                                        else if (s.includes('\n')) answers = s.split('\n');
-                                        else answers = [s];
+                                        if (inputEs.length > 1) {
+                                            if (s.includes('###')) answers = s.split('###');
+                                            else if (s.includes('===')) answers = s.split('===');
+                                            else if (s.includes('#')) answers = s.split('#');
+                                            else if (s.includes('|')) answers = s.split('|');
+                                            else if (s.includes('\n')) answers = s.split('\n');
+                                            else answers = [s];
+                                        } else {
+                                            answers = [s];
+                                        }
                                     } else {
                                         answers = [String(result)];
                                     }
@@ -2388,23 +2379,21 @@
                 _w.top.unrivalDoneWorkId = getQueryVariable('workId');
                 _w.top.unrivalWorkInfo = '正确率符合标准 (' + currentAccuracy + '% >= ' + curAccuracy + '%)，已提交测试';
                 setTimeout(function () {
-                    let fnSubmitCheck = (typeof _w.submitCheckTimes === 'function') ? _w.submitCheckTimes : (typeof submitCheckTimes === 'function' ? submitCheckTimes : null);
-                    let fnEscapeBlank = (typeof _w.escapeBlank === 'function') ? _w.escapeBlank : (typeof escapeBlank === 'function' ? escapeBlank : null);
-                    let fnSubmitAction = (typeof _w.submitAction === 'function') ? _w.submitAction : (typeof submitAction === 'function' ? submitAction : null);
+                    if (typeof _w.submitCheckTimes === 'function') _w.submitCheckTimes();
+                    else if (typeof submitCheckTimes === 'function') submitCheckTimes();
 
-                    if (fnSubmitCheck) fnSubmitCheck();
-                    if (fnEscapeBlank) fnEscapeBlank();
-                    if (fnSubmitAction) {
-                        fnSubmitAction();
-                    } else if (_d.getElementById('form1') && typeof _d.getElementById('form1').submit === 'function') {
-                        _d.getElementById('form1').submit();
-                    } else if (typeof _w.saveWork === 'function') {
-                        _w.saveWork(2);
-                    }
-                    // 提交后延时兜底通知主面板完成，防止超星未跳转导致卡死
+                    if (typeof _w.escapeBlank === 'function') _w.escapeBlank();
+                    else if (typeof escapeBlank === 'function') escapeBlank();
+
+                    if (typeof _w.submitAction === 'function') _w.submitAction();
+                    else if (typeof submitAction === 'function') submitAction();
+
+                    // 60秒仅做日志提示，不强行清空 iframe 或改动状态
                     setTimeout(function () {
-                        _w.top.unrivalWorkDone = true;
-                    }, 6000);
+                        if (!_w.top.unrivalWorkDone) {
+                            _w.top.unrivalWorkInfo = '提示：测验提交操作已等待超过60秒，如页面未自动跳转请手动确认。';
+                        }
+                    }, 60000);
                 }, parseInt(Math.random() * 2000 + 3000, 10));
             } else if (_w.top.unrivalAutoSave == '1') {
                 _w.top.unrivalWorkInfo = '正确率(' + currentAccuracy + '%)未达提交标准或未开启自动提交，已自动保存答案';
@@ -2412,13 +2401,14 @@
                     _w.top.unrivalDoneWorkId = getQueryVariable('workId');
                     if (typeof _w.noSubmit === 'function') {
                         _w.noSubmit();
-                    } else if (typeof _w.saveWork === 'function') {
-                        _w.saveWork(1);
+                    } else if (typeof noSubmit === 'function') {
+                        noSubmit();
                     }
-                    // 保存后兜底通知主面板收起测验窗口
                     setTimeout(function () {
-                        _w.top.unrivalWorkDone = true;
-                    }, 3000);
+                        if (!_w.top.unrivalWorkDone) {
+                            _w.top.unrivalWorkInfo = '提示：测验保存操作已等待超过60秒，如未提示保存成功请手动确认。';
+                        }
+                    }, 60000);
                 }, 2000);
             } else {
                 _w.top.unrivalWorkInfo = '当前正确率：' + currentAccuracy + '%，用户设置为不自动保存，请手动处理作业';
