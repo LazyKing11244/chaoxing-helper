@@ -43,6 +43,36 @@ function initCardsPage() {
     _d.getElementsByTagName("html")[0].innerHTML = CARDS_PANEL_HTML;
     bindPanelEvents();
 
+    // 绑定任务列表中直链复制按钮事件委托
+    if (!_d.__unrivalCopyLinkBound) {
+        _d.__unrivalCopyLinkBound = true;
+        _d.addEventListener('click', function (e) {
+            const target = e.target;
+            if (target && target.classList && target.classList.contains('unrival-copy-link')) {
+                e.preventDefault();
+                const rawUrl = decodeURIComponent(target.getAttribute('data-url') || '');
+                if (rawUrl) {
+                    if (typeof GM_setClipboard === 'function') {
+                        GM_setClipboard(rawUrl);
+                        alert('直链已成功复制到剪贴板！\n可直接粘贴至 IDM、迅雷或浏览器新建任务进行极速下载。');
+                    } else {
+                        const input = _d.createElement('textarea');
+                        input.value = rawUrl;
+                        _d.body.appendChild(input);
+                        input.select();
+                        try {
+                            _d.execCommand('copy');
+                            alert('直链已成功复制到剪贴板！');
+                        } catch (err) {
+                            prompt('请手动复制直链：', rawUrl);
+                        }
+                        _d.body.removeChild(input);
+                    }
+                }
+            }
+        });
+    }
+
     const missionList = {};
 
     const loopjob = () => {
@@ -199,7 +229,22 @@ function initCardsPage() {
                         'running': false
                     };
                     const vObjId = (item['property'] && item['property']['objectid']) || item['objectid'] || '';
-                    const vDownloadLink = vObjId ? `<a href="https://d0.ananas.chaoxing.com/download/${vObjId}" target="_blank" rel="noopener" style="float:right;font-size:12px;color:#337ab7;text-decoration:none;" title="下载原始资源">下载</a>` : '';
+                    const realVideoUrl = videoInfo['httphd'] || videoInfo['http'] || videoInfo['download'] || '';
+                    let vDownloadLink = '';
+                    if (realVideoUrl) {
+                        vDownloadLink = `
+                            <span style="float:right;font-size:12px;">
+                                <a href="${realVideoUrl}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" style="color:#337ab7;text-decoration:none;margin-right:8px;" title="在新窗口打开直链播放或另存为">下载/播放</a>
+                                <a href="javascript:void(0);" class="unrival-copy-link" data-url="${encodeURIComponent(realVideoUrl)}" style="color:#5cb85c;text-decoration:none;" title="复制直链至 IDM/下载器">复制直链</a>
+                            </span>`;
+                    } else if (vObjId) {
+                        const fallbackUrl = `https://d0.ananas.chaoxing.com/download/${vObjId}`;
+                        vDownloadLink = `
+                            <span style="float:right;font-size:12px;">
+                                <a href="${fallbackUrl}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" style="color:#999;text-decoration:none;margin-right:8px;" title="备用下载链接（部分节点可能受限）">备用下载</a>
+                                <a href="javascript:void(0);" class="unrival-copy-link" data-url="${encodeURIComponent(fallbackUrl)}" style="color:#5cb85c;text-decoration:none;" title="复制备用直链">复制直链</a>
+                            </span>`;
+                    }
                     _d.getElementById('joblist').innerHTML += `
                         <div class="panel panel-default">
                             <div class="panel-body">${vDownloadLink}[视频] ${item['property']['name']}</div>
@@ -510,7 +555,12 @@ function initCardsPage() {
             video_getReady(item);
         } else if (item['type'] === 'document') {
             const dObjId = (item['property'] && item['property']['objectid']) || item['objectid'] || '';
-            const dDownloadLink = dObjId ? `<a href="https://d0.ananas.chaoxing.com/download/${dObjId}" target="_blank" rel="noopener" style="float:right;font-size:12px;color:#337ab7;text-decoration:none;" title="下载原始资源">下载</a>` : '';
+            const dUrl = dObjId ? `https://d0.ananas.chaoxing.com/download/${dObjId}` : '';
+            const dDownloadLink = dUrl ? `
+                <span style="float:right;font-size:12px;">
+                    <a href="${dUrl}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" style="color:#337ab7;text-decoration:none;margin-right:8px;" title="下载原始文档资源">下载</a>
+                    <a href="javascript:void(0);" class="unrival-copy-link" data-url="${encodeURIComponent(dUrl)}" style="color:#5cb85c;text-decoration:none;" title="复制直链至 IDM/下载器">复制直链</a>
+                </span>` : '';
             missionList['m' + item['jobid']] = {
                 'type': 'document',
                 'jtoken': item['jtoken'],
