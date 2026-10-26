@@ -104,6 +104,12 @@ function initCardsPage() {
                 if (!isCat) {
                     logs.addLog('推荐使用 <a href="https://docs.scriptcat.org/use/#%E5%AE%89%E8%A3%85%E6%8F%92%E4%BB%B6" target="_blank">ScriptCat 脚本猫</a> 运行本脚本以获得最佳体验', 'orange');
                 }
+                let isBgActive = (_w.top && _w.top.backNow == 1) || GM_getValue('unrivalbacknow', '0') === '1';
+                let bgBtn = _d.getElementById('backGround');
+                if (bgBtn) {
+                    bgBtn.setAttribute('class', isBgActive ? 'btn btn-success btn-sm' : 'btn btn-default btn-sm');
+                    bgBtn.innerText = isBgActive ? '已激活挂机' : '激活挂机';
+                }
                 if (_w.top.unrivalReviewMode == '1') {
                     logs.addLog('复习模式已开启，遇到已完成的视频任务不会跳过', 'green');
                     _d.getElementById('reviewModeButton').setAttribute('class', ['btn btn-default btn-sm', 'btn btn-success btn-sm'][_w.top.unrivalReviewMode]);

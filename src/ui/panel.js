@@ -16,7 +16,7 @@ const CARDS_PANEL_HTML = `
             <div class="col-md-6 col-md-offset-3">
                 <div class="header clearfix">
                     <h3 class="text-muted" style="margin-top: 20px;margin-bottom: 0;float: left;">
-                        <a href="https://github.com/LazyKing11244/chaoxing-helper" target="_blank" style="color: #337ab7; text-decoration: none;">学习通小助手 v5.0.3 (2026维护版)</a>
+                        <a href="https://github.com/LazyKing11244/chaoxing-helper" target="_blank" style="color: #337ab7; text-decoration: none;">学习通小助手 v5.0.4 (2026维护版)</a>
                     </h3>
                 </div>
                 <hr style="margin-top: 10px;margin-bottom: 20px;">
@@ -47,7 +47,7 @@ const CARDS_PANEL_HTML = `
                                 &nbsp;|&nbsp;
                                 <a id='fuckMeModeButton' class="btn btn-default btn-sm" href="https://scriptcat.org/zh-CN/script-show-page/379" target="_blank">常见问题</a>
                                 &nbsp;
-                                <a id='backGround' class="btn btn-default btn-sm" target="view_window">激活挂机</a>
+                                <a id='backGround' class="btn btn-default btn-sm">激活挂机</a>
                             </div>
 
                             <hr style="margin: 10px 0;">
@@ -262,11 +262,37 @@ function bindPanelEvents() {
                 }
             };
 
-            // 4. 激活挂机
-            _d.getElementById('backGround').onclick = function () {
-                logs.addLog('挂机激活成功，您现在可以最小化页面了', 'green');
-                _d.getElementById('backGround').setAttribute('class', 'btn btn-success btn-sm');
-                _w.top.backNow = 1;
+            // 4. 激活挂机（状态恢复与点击切换）
+            const bgBtn = _d.getElementById('backGround');
+            const isBgActive = (_w.top && _w.top.backNow !== undefined && _w.top.backNow !== null)
+                ? (_w.top.backNow == 1)
+                : (GM_getValue('unrivalbacknow', '0') === '1');
+
+            const updateBgBtnUI = (active) => {
+                if (active) {
+                    bgBtn.setAttribute('class', 'btn btn-success btn-sm');
+                    bgBtn.innerText = '已激活挂机';
+                } else {
+                    bgBtn.setAttribute('class', 'btn btn-default btn-sm');
+                    bgBtn.innerText = '激活挂机';
+                }
+            };
+            updateBgBtnUI(isBgActive);
+
+            bgBtn.onclick = function () {
+                let currentActive = bgBtn.getAttribute('class').includes('btn-success');
+                let nextActive = !currentActive;
+                if (nextActive) {
+                    _w.top.backNow = 1;
+                    GM_setValue('unrivalbacknow', '1');
+                    updateBgBtnUI(true);
+                    logs.addLog('挂机激活成功，您现在可以最小化页面了', 'green');
+                } else {
+                    _w.top.backNow = 0;
+                    GM_setValue('unrivalbacknow', '0');
+                    updateBgBtnUI(false);
+                    logs.addLog('挂机已取消激活', 'orange');
+                }
             };
 
             // 5. 复习模式

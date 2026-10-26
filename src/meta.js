@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         【减负社区】【超星学习通小助手】【完全免费】视频-章节测试|自动挂机|防清进度|不占资源
 // @namespace    unrival
-// @version      5.0.3
+// @version      5.0.4
 // @homepageURL  https://github.com/LazyKing11244/chaoxing-helper
 // @supportURL   https://github.com/LazyKing11244/chaoxing-helper/issues
 // @updateURL    https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
 // @downloadURL  https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
-// @description  2026 重构维护版：优化单选多选判断精准匹配算法、修复测验自动保存卡死与网络超时线程泄漏、支持多空填空与跨域兼容增强。
+// @description  2026 重构维护版：修复换节后激活挂机状态丢失、优化单选多选判断匹配与填空拆分、支持后台静音保活持久化。
 // @author       unrival
 // @run-at       document-end
 // @storageName  unrivalxxt

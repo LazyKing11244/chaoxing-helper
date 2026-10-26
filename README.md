@@ -1,6 +1,6 @@
 # 超星学习通小助手 (chaoxing-helper)
 
-> **版本**：v5.0.3 (2026 重构维护版)  
+> **版本**：v5.0.4 (2026 重构维护版)  
 > **开源协议**：GPL-3.0-or-later  
 > **项目主页**：[LazyKing11244/chaoxing-helper](https://github.com/LazyKing11244/chaoxing-helper)
 

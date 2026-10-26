@@ -5,6 +5,7 @@
 let jumpType = parseInt(GM_getValue('unrivaljumptype', '1'), 10); // 0:智能模式，1:遍历模式，2:不跳转
 let disableMonitor = parseInt(GM_getValue('unrivaldisablemonitor', '0'), 10); // 0:无操作，1:解除多端学习监控
 let randomDo = parseInt(GM_getValue('unrivalrandomdo', '1'), 10); // 0:关闭盲猜，1:开启盲猜
+let backNow = parseInt(GM_getValue('unrivalbacknow', '0'), 10); // 0:未激活挂机，1:已激活挂机
 let backGround = 0; // 是否对接超星挂机小助手，需要先安装对应脚本
 
 // 自动登录配置（仅支持手机号+密码登录）
@@ -33,4 +34,7 @@ try {
     _w.top.unrivalJumpType = jumpType;
     _w.top.unrivalDisableMonitor = disableMonitor;
     _w.top.unrivalRandomDo = randomDo;
+    if (_w.top.backNow === undefined || _w.top.backNow === null) {
+        _w.top.backNow = backNow;
+    }
 } catch (e) { }
