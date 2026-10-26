@@ -254,6 +254,47 @@ const CARDS_PANEL_HTML = `
             grid-column: 1 / -1;
             height: 760px;
         }
+        /* Quiz Summary Table */
+        .cx-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .cx-table th {
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 6px 8px;
+            font-weight: 600;
+            color: #475569;
+            text-align: left;
+        }
+        .cx-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+        .cx-table tr:hover {
+            background-color: #f8fafc;
+        }
+        .cx-table tr.unmatched {
+            background-color: #fff8e6;
+            color: #856404;
+        }
+        .cx-table tr.unmatched:hover {
+            background-color: #fef3c7;
+        }
+        .copyable-cell {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        .copyable-cell:hover {
+            text-decoration: underline;
+        }
+        .cell-copied {
+            background-color: #dcfce7 !important;
+            transition: background-color 0.2s;
+        }
     </style>
 </head>
 <body>
@@ -423,6 +464,33 @@ const CARDS_PANEL_HTML = `
                         </div>
                     </div>
                 </div>
+
+                <div class="cx-card" id="quizSummaryPanel" style="display: none;">
+                    <div class="cx-card-header">
+                        <span>答题结果速览 (点击题目/答案可复制)</span>
+                        <a id="toggleQuizSummaryBtn" class="btn btn-default btn-xs">收起 ▲</a>
+                    </div>
+                    <div class="cx-card-body" id="quizSummaryBody" style="padding: 0;">
+                        <div style="max-height: 220px; overflow-y: auto;">
+                            <table class="cx-table" id="quizSummaryTable">
+                                <thead style="position: sticky; top: 0; z-index: 1;">
+                                    <tr>
+                                        <th style="width: 42px; text-align: center;">题号</th>
+                                        <th style="width: 60px; text-align: center;">题型</th>
+                                        <th>题目</th>
+                                        <th style="width: 130px;">答案</th>
+                                        <th style="width: 70px; text-align: center;">状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="quizSummaryTbody">
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; color: #94a3b8; padding: 12px;">等待作答数据...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 底部跨栏：章节测试作答容器 -->
@@ -496,6 +564,17 @@ function bindPanelEvents() {
                 clearLogBtn.onclick = function () {
                     logs.logArry = [];
                     logs.addLog('日志已清空', 'green');
+                };
+            }
+
+            const toggleQuizSummaryBtn = _d.getElementById('toggleQuizSummaryBtn');
+            const quizSummaryBody = _d.getElementById('quizSummaryBody');
+            if (toggleQuizSummaryBtn && quizSummaryBody) {
+                let isQuizCollapsed = false;
+                toggleQuizSummaryBtn.onclick = function () {
+                    isQuizCollapsed = !isQuizCollapsed;
+                    quizSummaryBody.style.display = isQuizCollapsed ? 'none' : 'block';
+                    toggleQuizSummaryBtn.innerText = isQuizCollapsed ? '展开 ▼' : '收起 ▲';
                 };
             }
 
@@ -1071,4 +1150,107 @@ function bindPanelEvents() {
             }
         }
     }, 100);
+}
+
+// ==========================================
+// 答题结果速览表辅助函数与渲染
+// ==========================================
+
+function copyToClipboard(text, el) {
+    if (!text) return;
+    try {
+        if (typeof GM_setClipboard === 'function') {
+            GM_setClipboard(text);
+        } else if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(text);
+        } else {
+            const input = _d.createElement('textarea');
+            input.value = text;
+            _d.body.appendChild(input);
+            input.select();
+            _d.execCommand('copy');
+            _d.body.removeChild(input);
+        }
+        if (el) {
+            const origBg = el.style.backgroundColor;
+            el.classList.add('cell-copied');
+            setTimeout(() => {
+                el.classList.remove('cell-copied');
+                el.style.backgroundColor = origBg;
+            }, 600);
+        }
+        if (typeof logs !== 'undefined' && logs.addLog) {
+            logs.addLog('已复制到剪贴板: ' + (text.length > 25 ? text.slice(0, 25) + '...' : text), 'green');
+        }
+    } catch (e) {
+        if (typeof logs !== 'undefined' && logs.addLog) {
+            logs.addLog('复制失败: ' + (e.message || '未知错误'), 'red');
+        }
+    }
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderQuizSummary(results) {
+    const panel = _d.getElementById('quizSummaryPanel');
+    const tbody = _d.getElementById('quizSummaryTbody');
+    if (!panel || !tbody) return;
+    if (!Array.isArray(results) || results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 12px;">等待作答数据...</td></tr>';
+        return;
+    }
+
+    let html = '';
+    for (let i = 0; i < results.length; i++) {
+        const item = results[i];
+        const num = item.num !== undefined ? item.num : (item.index !== undefined ? item.index + 1 : (i + 1));
+        const type = item.type || item.questionType || '未知';
+        const question = item.question || item.title || '';
+        let answer = item.answer !== undefined ? item.answer : (item.result !== undefined ? item.result : '');
+        if (typeof answer === 'object') {
+            try { answer = JSON.stringify(answer); } catch (e) { answer = String(answer); }
+        } else {
+            answer = String(answer || '');
+        }
+
+        const isMatched = !(item.matched === false || item.status === 'unmatched');
+        const rowClass = isMatched ? '' : 'unmatched';
+        const statusHtml = isMatched
+            ? '<span style="color: #16a34a; font-weight: 500;">✅ 已填</span>'
+            : '<span style="color: #b45309; font-weight: 600;">⚠️ 待确认</span>';
+
+        const safeQ = escapeHtml(question);
+        const safeAns = escapeHtml(answer);
+
+        html += `
+            <tr class="${rowClass}">
+                <td style="text-align: center; color: #64748b; font-weight: 500;">${num}</td>
+                <td style="text-align: center;"><span style="background: #e2e8f0; color: #334155; padding: 1px 4px; border-radius: 3px; font-size: 11px;">${escapeHtml(type)}</span></td>
+                <td class="copyable-cell" data-copy="${safeQ}" title="点击复制题目" style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeQ || '-'}</td>
+                <td class="copyable-cell" data-copy="${safeAns}" title="点击复制答案" style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: Consolas, monospace;">${safeAns || '-'}</td>
+                <td style="text-align: center;">${statusHtml}</td>
+            </tr>
+        `;
+    }
+    tbody.innerHTML = html;
+
+    const copyCells = tbody.querySelectorAll('.copyable-cell');
+    copyCells.forEach(cell => {
+        cell.onclick = function (e) {
+            e.stopPropagation();
+            const text = this.getAttribute('data-copy');
+            if (text) {
+                const unescaped = text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                copyToClipboard(unescaped, this);
+            }
+        };
+    });
 }

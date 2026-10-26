@@ -34,8 +34,10 @@ function searchQuestionAnswer(quItem, callback, widParam) {
         }
         const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
         if (customToken) headers['Authorization'] = customToken;
+        const courseName = getCourseName();
         const param = 'question=' + encodeURIComponent(quItem['question']) +
-            '&type=' + quItem['typeCode'] + '&id=' + currentWid;
+            '&type=' + quItem['typeCode'] + '&id=' + currentWid +
+            '&course=' + encodeURIComponent(courseName);
         GM_xmlhttpRequest({
             method: 'POST',
             url: customUrl,
@@ -70,7 +72,12 @@ function searchQuestionAnswer(quItem, callback, widParam) {
             optArr.sort();
             optionsStr = optArr.join('\n');
         }
-        let promptText = '【题型】' + quItem['type'] + '\n【题目】' + quItem['question'] + '\n';
+        const courseName = getCourseName();
+        let promptText = '';
+        if (courseName) {
+            promptText += '【课程】' + courseName + '\n';
+        }
+        promptText += '【题型】' + quItem['type'] + '\n【题目】' + quItem['question'] + '\n';
         if (optionsStr) {
             promptText += '【选项】\n' + optionsStr + '\n';
         }

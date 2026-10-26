@@ -105,6 +105,29 @@ function parseQuestionsFromDom() {
 function applyQuestionAnswer(res, quu, contextObj) {
     const { choiceEs, cleanQId, questionsElement, curRandomDo, curAccuracy, onAnswerMatched } = contextObj;
     const ctResult = res || { 'code': -1, 'data': '未找到答案' };
+    let isMatched = false;
+
+    const handleAnswerMatched = () => {
+        isMatched = true;
+        if (typeof onAnswerMatched === 'function') {
+            try {
+                onAnswerMatched();
+            } catch (e) { }
+        }
+    };
+
+    const recordWorkResult = () => {
+        if (_w.top && Array.isArray(_w.top.unrivalWorkResults)) {
+            _w.top.unrivalWorkResults[quu.index] = {
+                index: quu.index + 1,
+                type: quu.type,
+                question: quu.question,
+                answer: ctResult.code === 1 ? (typeof ctResult.data === 'object' ? JSON.stringify(ctResult.data) : String(ctResult.data)) : '未找到答案',
+                from: ctResult.from || (ctResult.code === 1 ? '公共题库' : '-'),
+                matched: isMatched
+            };
+        }
+    };
 
     try {
         if (ctResult['code'] !== 1) {
@@ -168,7 +191,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                     for (let u = 0, k = choiceEs.length; u < k; u++) {
                         if (choiceEs[u].getAttribute('val-param') === answer && choiceEs[u].getAttribute('id-param') === cleanQId) {
                             choiceEs[u].click();
-                            onAnswerMatched();
+                            handleAnswerMatched();
                             return;
                         }
                     }
@@ -184,7 +207,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                         const emLtr = (em[0].getAttribute('id-param') || em[0].innerText || '').trim().toUpperCase();
                         if (emLtr === targetLtr && choiceEs[u].getAttribute('id-param') === cleanQId) {
                             choiceEs[u].click();
-                            onAnswerMatched();
+                            handleAnswerMatched();
                             return;
                         }
                     }
@@ -227,7 +250,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 if (letterMatch) {
                     const targetLetter = letterMatch[1].toUpperCase();
                     if (clickOptionByLetter(targetLetter)) {
-                        onAnswerMatched();
+                        handleAnswerMatched();
                         return;
                     }
                 }
@@ -239,7 +262,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                     const cleanOpt = cleanText(option);
                     if (cleanOpt && cleanResText && cleanOpt === cleanResText) {
                         if (clickOptionByLetter(quu['options'][option]['value'])) {
-                            onAnswerMatched();
+                            handleAnswerMatched();
                             return;
                         }
                     }
@@ -251,7 +274,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                     const cleanOpt = cleanText(option);
                     if (cleanOpt && cleanResText && cleanOpt.length >= 2 && (cleanOpt.includes(cleanResText) || cleanResText.includes(cleanOpt))) {
                         if (clickOptionByLetter(quu['options'][option]['value'])) {
-                            onAnswerMatched();
+                            handleAnswerMatched();
                             return;
                         }
                     }
@@ -325,7 +348,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 }
 
                 if (hasAnswer) {
-                    onAnswerMatched();
+                    handleAnswerMatched();
                 } else if (curRandomDo == 1 && curAccuracy < 100) {
                     _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到正确答案，自动全选';
                     for (let option in quu['options']) {
@@ -380,7 +403,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                         filledCount++;
                     }
                     if (filledCount > 0) {
-                        onAnswerMatched();
+                        handleAnswerMatched();
                     }
                 }
                 break;
@@ -388,5 +411,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
         }
     } catch (e) {
         console.log(e);
+    } finally {
+        recordWorkResult();
     }
 }

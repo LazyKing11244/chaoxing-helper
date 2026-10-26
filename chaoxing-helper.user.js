@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         超星学习通助手 Next
 // @namespace    unrival
-// @version      5.0.5
+// @version      5.1.0
 // @homepageURL  https://github.com/LazyKing11244/chaoxing-helper
 // @supportURL   https://github.com/LazyKing11244/chaoxing-helper/issues
 // @updateURL    https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
@@ -21,11 +21,13 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_info
+// @grant        GM_setClipboard
 // @connect      mooc1-1.chaoxing.com
 // @connect      mooc1.chaoxing.com
 // @connect      mooc1-2.chaoxing.com
 // @connect      cx.icodef.com
 // @connect      api.deepseek.com
+// @connect      static.muketool.com
 // @connect      *
 // @license      GPL-3.0-or-later
 // @original-script https://greasyfork.org/zh-CN/scripts/453287
@@ -70,6 +72,72 @@ function getCookie(name) {
     return `; ${document.cookie}`.split(`; ${name}=`).pop().split(';').shift();
 }
 
+// 全角转半角标准化
+function toCDB(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str.replace(/[\uff01-\uff5e]/g, function (ch) {
+        return String.fromCharCode(ch.charCodeAt(0) - 65248);
+    }).replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/。/g, '.');
+}
+
+// 提取当前课程名称并缓存
+function getCourseName() {
+    try {
+        if (_w.top && _w.top.unrivalCourseName) {
+            return _w.top.unrivalCourseName;
+        }
+        let courseName = '';
+        let topDoc = null;
+        try {
+            topDoc = _w.top ? _w.top.document : null;
+        } catch (e) {
+            topDoc = null;
+        }
+        const docs = [topDoc, _d].filter(Boolean);
+
+        for (const doc of docs) {
+            if (courseName) break;
+            try {
+                // 1. 尝试从 script 中匹配 courseName
+                const scripts = doc.getElementsByTagName('script');
+                for (let i = 0; i < scripts.length; i++) {
+                    const text = scripts[i].textContent || scripts[i].innerText || '';
+                    const match = text.match(/courseName\s*[:=]\s*['"]([^'"]+)['"]/);
+                    if (match && match[1]) {
+                        courseName = match[1].trim();
+                        break;
+                    }
+                }
+
+                // 2. 尝试读取 .coursename, .main h1, h1 文本
+                if (!courseName) {
+                    const selectors = ['.coursename', '.course_name', '.main h1', 'h1'];
+                    for (const sel of selectors) {
+                        const el = doc.querySelector(sel);
+                        if (el) {
+                            const txt = (el.innerText || el.textContent || '').trim();
+                            if (txt) {
+                                courseName = txt;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (e) { }
+        }
+
+        courseName = courseName ? trim(courseName).replace(/\s+/g, ' ') : '';
+        if (_w.top && courseName) {
+            try {
+                _w.top.unrivalCourseName = courseName;
+            } catch (e) { }
+        }
+        return courseName;
+    } catch (e) {
+        return '';
+    }
+}
+
 // 将富文本题干中的 img 标签替换为纯文本 URL，避免标签干扰
 function handleImgs(s) {
     if (!s || typeof s !== 'string') return '';
@@ -89,6 +157,7 @@ function handleImgs(s) {
 // 去除标点符号与 HTML 标签的标准化修剪
 function trim(s) {
     if (!s || typeof s !== 'string') return '';
+    s = toCDB(s);
     return handleImgs(s)
         .replaceAll('javascript:void(0);', '')
         .replaceAll("&nbsp;", ' ')
@@ -111,6 +180,7 @@ function trim(s) {
 // 答案与选项比对专用高强度降噪清洗（转小写并剔除所有不可见字符与常见标点）
 function cleanText(s) {
     if (!s || typeof s !== 'string') return '';
+    s = toCDB(s);
     return trim(s)
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
@@ -122,6 +192,169 @@ function cleanText(s) {
         .replace(/\u00a0/g, ' ')
         .replace(/[，,。\.：:；;？\?（\(）\)“”"！!\-_\s]/g, '')
         .toLowerCase();
+}
+
+// 按需字体反爬解密
+function decryptFontIfNeeded(doneCallback) {
+    if (typeof doneCallback !== 'function') doneCallback = () => { };
+    try {
+        const secretEls = _d.querySelectorAll('.font-cxsecret');
+        if (!secretEls || secretEls.length === 0) {
+            doneCallback();
+            return;
+        }
+
+        let styleBase64 = '';
+        const styles = _d.getElementsByTagName('style');
+        for (let i = 0; i < styles.length; i++) {
+            const text = styles[i].textContent || styles[i].innerText || '';
+            if (text.includes('font-cxsecret')) {
+                const match = text.match(/base64,([\w\W]+?)['"\)]/);
+                if (match && match[1]) {
+                    styleBase64 = match[1].trim();
+                    break;
+                }
+            }
+        }
+
+        if (!styleBase64) {
+            doneCallback();
+            return;
+        }
+
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            doneCallback();
+        };
+
+        const gmGet = (url) => new Promise((resolve, reject) => {
+            try {
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: url,
+                    timeout: 5000,
+                    onload: (res) => {
+                        if (res.status === 200 && res.responseText) {
+                            resolve(res.responseText);
+                        } else {
+                            reject(new Error('HTTP status ' + res.status));
+                        }
+                    },
+                    onerror: (err) => reject(err),
+                    ontimeout: () => reject(new Error('Request timeout: ' + url))
+                });
+            } catch (e) {
+                reject(e);
+            }
+        });
+
+        (async () => {
+            try {
+                // 1. 获取 cxsecret 映射表（优先读取本地缓存）
+                let cxsecretMap = null;
+                const cachedMapStr = GM_getValue('unrival_cxsecret_map', '');
+                if (cachedMapStr) {
+                    try {
+                        cxsecretMap = JSON.parse(cachedMapStr);
+                    } catch (e) {
+                        cxsecretMap = null;
+                    }
+                }
+
+                const tasks = [];
+                const needFetchTypr = !(_w.Typr && _w.Typr.U);
+                if (needFetchTypr) {
+                    tasks.push(gmGet('https://static.muketool.com/scripts/cx/v2/js/Typr.min.js'));
+                    tasks.push(gmGet('https://static.muketool.com/scripts/cx/v2/js/Typr.U.min.js'));
+                }
+                if (!cxsecretMap) {
+                    tasks.push(gmGet('https://static.muketool.com/scripts/cx/v2/fonts/cxsecret.json'));
+                }
+
+                const results = await Promise.all(tasks);
+                let resIdx = 0;
+                if (needFetchTypr) {
+                    const typrCode = results[resIdx++];
+                    const typrUCode = results[resIdx++];
+                    const T = new Function('window', typrCode + '\n; return Typr;')(_w);
+                    new Function('Typr', 'window', typrUCode + '\n; return Typr.U;')(T, _w);
+                    _w.Typr = T;
+                }
+                if (!cxsecretMap) {
+                    const mapJsonStr = results[resIdx++];
+                    cxsecretMap = JSON.parse(mapJsonStr);
+                    try {
+                        GM_setValue('unrival_cxsecret_map', mapJsonStr);
+                    } catch (e) { }
+                }
+
+                const TyprInstance = _w.Typr;
+                if (!TyprInstance || !TyprInstance.U || !cxsecretMap) {
+                    finish();
+                    return;
+                }
+
+                // 2. 解码 base64 字体并解析
+                const rawBinary = atob(styleBase64.replace(/\s+/g, ''));
+                const len = rawBinary.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = rawBinary.charCodeAt(i);
+                }
+                const parsedFonts = TyprInstance.parse(bytes.buffer);
+                if (!parsedFonts || parsedFonts.length === 0) {
+                    finish();
+                    return;
+                }
+                const font = parsedFonts[0];
+
+                // 3. 遍历 19968 到 40870 构造字符映射表
+                const fontMap = {};
+                for (let code = 19968; code <= 40870; code++) {
+                    try {
+                        const glyph = TyprInstance.U.codeToGlyph(font, code);
+                        if (!glyph) continue;
+                        const path = TyprInstance.U.glyphToPath(font, glyph);
+                        if (!path || !path.cmds || path.cmds.length === 0) continue;
+                        const md5 = localMd5(JSON.stringify(path)).slice(24);
+                        if (cxsecretMap[md5] !== undefined) {
+                            const realChar = typeof cxsecretMap[md5] === 'number'
+                                ? String.fromCharCode(cxsecretMap[md5])
+                                : String(cxsecretMap[md5]);
+                            fontMap[String.fromCharCode(code)] = realChar;
+                        }
+                    } catch (err) { }
+                }
+
+                // 4. 替换所有 .font-cxsecret 元素内的加密字符并移除 class
+                const encChars = Object.keys(fontMap);
+                if (encChars.length > 0) {
+                    const reg = new RegExp('[' + encChars.join('') + ']', 'g');
+                    const elements = _d.querySelectorAll('.font-cxsecret');
+                    for (let el of elements) {
+                        if (el.innerHTML) {
+                            el.innerHTML = el.innerHTML.replace(reg, ch => fontMap[ch] || ch);
+                        }
+                        el.classList.remove('font-cxsecret');
+                    }
+                } else {
+                    const elements = _d.querySelectorAll('.font-cxsecret');
+                    for (let el of elements) {
+                        el.classList.remove('font-cxsecret');
+                    }
+                }
+            } catch (err) {
+                console.error('[decryptFontIfNeeded Error]', err);
+            } finally {
+                finish();
+            }
+        })();
+    } catch (e) {
+        console.error('[decryptFontIfNeeded Outer Error]', e);
+        doneCallback();
+    }
 }
 
 // ==========================================
@@ -753,6 +986,47 @@ const CARDS_PANEL_HTML = `
             grid-column: 1 / -1;
             height: 760px;
         }
+        /* Quiz Summary Table */
+        .cx-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .cx-table th {
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 6px 8px;
+            font-weight: 600;
+            color: #475569;
+            text-align: left;
+        }
+        .cx-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+        .cx-table tr:hover {
+            background-color: #f8fafc;
+        }
+        .cx-table tr.unmatched {
+            background-color: #fff8e6;
+            color: #856404;
+        }
+        .cx-table tr.unmatched:hover {
+            background-color: #fef3c7;
+        }
+        .copyable-cell {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        .copyable-cell:hover {
+            text-decoration: underline;
+        }
+        .cell-copied {
+            background-color: #dcfce7 !important;
+            transition: background-color 0.2s;
+        }
     </style>
 </head>
 <body>
@@ -922,6 +1196,33 @@ const CARDS_PANEL_HTML = `
                         </div>
                     </div>
                 </div>
+
+                <div class="cx-card" id="quizSummaryPanel" style="display: none;">
+                    <div class="cx-card-header">
+                        <span>答题结果速览 (点击题目/答案可复制)</span>
+                        <a id="toggleQuizSummaryBtn" class="btn btn-default btn-xs">收起 ▲</a>
+                    </div>
+                    <div class="cx-card-body" id="quizSummaryBody" style="padding: 0;">
+                        <div style="max-height: 220px; overflow-y: auto;">
+                            <table class="cx-table" id="quizSummaryTable">
+                                <thead style="position: sticky; top: 0; z-index: 1;">
+                                    <tr>
+                                        <th style="width: 42px; text-align: center;">题号</th>
+                                        <th style="width: 60px; text-align: center;">题型</th>
+                                        <th>题目</th>
+                                        <th style="width: 130px;">答案</th>
+                                        <th style="width: 70px; text-align: center;">状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="quizSummaryTbody">
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; color: #94a3b8; padding: 12px;">等待作答数据...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 底部跨栏：章节测试作答容器 -->
@@ -995,6 +1296,17 @@ function bindPanelEvents() {
                 clearLogBtn.onclick = function () {
                     logs.logArry = [];
                     logs.addLog('日志已清空', 'green');
+                };
+            }
+
+            const toggleQuizSummaryBtn = _d.getElementById('toggleQuizSummaryBtn');
+            const quizSummaryBody = _d.getElementById('quizSummaryBody');
+            if (toggleQuizSummaryBtn && quizSummaryBody) {
+                let isQuizCollapsed = false;
+                toggleQuizSummaryBtn.onclick = function () {
+                    isQuizCollapsed = !isQuizCollapsed;
+                    quizSummaryBody.style.display = isQuizCollapsed ? 'none' : 'block';
+                    toggleQuizSummaryBtn.innerText = isQuizCollapsed ? '展开 ▼' : '收起 ▲';
                 };
             }
 
@@ -1572,6 +1884,109 @@ function bindPanelEvents() {
     }, 100);
 }
 
+// ==========================================
+// 答题结果速览表辅助函数与渲染
+// ==========================================
+
+function copyToClipboard(text, el) {
+    if (!text) return;
+    try {
+        if (typeof GM_setClipboard === 'function') {
+            GM_setClipboard(text);
+        } else if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(text);
+        } else {
+            const input = _d.createElement('textarea');
+            input.value = text;
+            _d.body.appendChild(input);
+            input.select();
+            _d.execCommand('copy');
+            _d.body.removeChild(input);
+        }
+        if (el) {
+            const origBg = el.style.backgroundColor;
+            el.classList.add('cell-copied');
+            setTimeout(() => {
+                el.classList.remove('cell-copied');
+                el.style.backgroundColor = origBg;
+            }, 600);
+        }
+        if (typeof logs !== 'undefined' && logs.addLog) {
+            logs.addLog('已复制到剪贴板: ' + (text.length > 25 ? text.slice(0, 25) + '...' : text), 'green');
+        }
+    } catch (e) {
+        if (typeof logs !== 'undefined' && logs.addLog) {
+            logs.addLog('复制失败: ' + (e.message || '未知错误'), 'red');
+        }
+    }
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderQuizSummary(results) {
+    const panel = _d.getElementById('quizSummaryPanel');
+    const tbody = _d.getElementById('quizSummaryTbody');
+    if (!panel || !tbody) return;
+    if (!Array.isArray(results) || results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 12px;">等待作答数据...</td></tr>';
+        return;
+    }
+
+    let html = '';
+    for (let i = 0; i < results.length; i++) {
+        const item = results[i];
+        const num = item.num !== undefined ? item.num : (item.index !== undefined ? item.index + 1 : (i + 1));
+        const type = item.type || item.questionType || '未知';
+        const question = item.question || item.title || '';
+        let answer = item.answer !== undefined ? item.answer : (item.result !== undefined ? item.result : '');
+        if (typeof answer === 'object') {
+            try { answer = JSON.stringify(answer); } catch (e) { answer = String(answer); }
+        } else {
+            answer = String(answer || '');
+        }
+
+        const isMatched = !(item.matched === false || item.status === 'unmatched');
+        const rowClass = isMatched ? '' : 'unmatched';
+        const statusHtml = isMatched
+            ? '<span style="color: #16a34a; font-weight: 500;">✅ 已填</span>'
+            : '<span style="color: #b45309; font-weight: 600;">⚠️ 待确认</span>';
+
+        const safeQ = escapeHtml(question);
+        const safeAns = escapeHtml(answer);
+
+        html += `
+            <tr class="${rowClass}">
+                <td style="text-align: center; color: #64748b; font-weight: 500;">${num}</td>
+                <td style="text-align: center;"><span style="background: #e2e8f0; color: #334155; padding: 1px 4px; border-radius: 3px; font-size: 11px;">${escapeHtml(type)}</span></td>
+                <td class="copyable-cell" data-copy="${safeQ}" title="点击复制题目" style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeQ || '-'}</td>
+                <td class="copyable-cell" data-copy="${safeAns}" title="点击复制答案" style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: Consolas, monospace;">${safeAns || '-'}</td>
+                <td style="text-align: center;">${statusHtml}</td>
+            </tr>
+        `;
+    }
+    tbody.innerHTML = html;
+
+    const copyCells = tbody.querySelectorAll('.copyable-cell');
+    copyCells.forEach(cell => {
+        cell.onclick = function (e) {
+            e.stopPropagation();
+            const text = this.getAttribute('data-copy');
+            if (text) {
+                const unescaped = text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                copyToClipboard(unescaped, this);
+            }
+        };
+    });
+}
+
 
     // ==================== 模块: tiku/search.js ====================
 // ==========================================
@@ -1610,8 +2025,10 @@ function searchQuestionAnswer(quItem, callback, widParam) {
         }
         const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
         if (customToken) headers['Authorization'] = customToken;
+        const courseName = getCourseName();
         const param = 'question=' + encodeURIComponent(quItem['question']) +
-            '&type=' + quItem['typeCode'] + '&id=' + currentWid;
+            '&type=' + quItem['typeCode'] + '&id=' + currentWid +
+            '&course=' + encodeURIComponent(courseName);
         GM_xmlhttpRequest({
             method: 'POST',
             url: customUrl,
@@ -1646,7 +2063,12 @@ function searchQuestionAnswer(quItem, callback, widParam) {
             optArr.sort();
             optionsStr = optArr.join('\n');
         }
-        let promptText = '【题型】' + quItem['type'] + '\n【题目】' + quItem['question'] + '\n';
+        const courseName = getCourseName();
+        let promptText = '';
+        if (courseName) {
+            promptText += '【课程】' + courseName + '\n';
+        }
+        promptText += '【题型】' + quItem['type'] + '\n【题目】' + quItem['question'] + '\n';
         if (optionsStr) {
             promptText += '【选项】\n' + optionsStr + '\n';
         }
@@ -1920,6 +2342,29 @@ function parseQuestionsFromDom() {
 function applyQuestionAnswer(res, quu, contextObj) {
     const { choiceEs, cleanQId, questionsElement, curRandomDo, curAccuracy, onAnswerMatched } = contextObj;
     const ctResult = res || { 'code': -1, 'data': '未找到答案' };
+    let isMatched = false;
+
+    const handleAnswerMatched = () => {
+        isMatched = true;
+        if (typeof onAnswerMatched === 'function') {
+            try {
+                onAnswerMatched();
+            } catch (e) { }
+        }
+    };
+
+    const recordWorkResult = () => {
+        if (_w.top && Array.isArray(_w.top.unrivalWorkResults)) {
+            _w.top.unrivalWorkResults[quu.index] = {
+                index: quu.index + 1,
+                type: quu.type,
+                question: quu.question,
+                answer: ctResult.code === 1 ? (typeof ctResult.data === 'object' ? JSON.stringify(ctResult.data) : String(ctResult.data)) : '未找到答案',
+                from: ctResult.from || (ctResult.code === 1 ? '公共题库' : '-'),
+                matched: isMatched
+            };
+        }
+    };
 
     try {
         if (ctResult['code'] !== 1) {
@@ -1983,7 +2428,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                     for (let u = 0, k = choiceEs.length; u < k; u++) {
                         if (choiceEs[u].getAttribute('val-param') === answer && choiceEs[u].getAttribute('id-param') === cleanQId) {
                             choiceEs[u].click();
-                            onAnswerMatched();
+                            handleAnswerMatched();
                             return;
                         }
                     }
@@ -1999,7 +2444,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                         const emLtr = (em[0].getAttribute('id-param') || em[0].innerText || '').trim().toUpperCase();
                         if (emLtr === targetLtr && choiceEs[u].getAttribute('id-param') === cleanQId) {
                             choiceEs[u].click();
-                            onAnswerMatched();
+                            handleAnswerMatched();
                             return;
                         }
                     }
@@ -2042,7 +2487,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 if (letterMatch) {
                     const targetLetter = letterMatch[1].toUpperCase();
                     if (clickOptionByLetter(targetLetter)) {
-                        onAnswerMatched();
+                        handleAnswerMatched();
                         return;
                     }
                 }
@@ -2054,7 +2499,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                     const cleanOpt = cleanText(option);
                     if (cleanOpt && cleanResText && cleanOpt === cleanResText) {
                         if (clickOptionByLetter(quu['options'][option]['value'])) {
-                            onAnswerMatched();
+                            handleAnswerMatched();
                             return;
                         }
                     }
@@ -2066,7 +2511,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                     const cleanOpt = cleanText(option);
                     if (cleanOpt && cleanResText && cleanOpt.length >= 2 && (cleanOpt.includes(cleanResText) || cleanResText.includes(cleanOpt))) {
                         if (clickOptionByLetter(quu['options'][option]['value'])) {
-                            onAnswerMatched();
+                            handleAnswerMatched();
                             return;
                         }
                     }
@@ -2140,7 +2585,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 }
 
                 if (hasAnswer) {
-                    onAnswerMatched();
+                    handleAnswerMatched();
                 } else if (curRandomDo == 1 && curAccuracy < 100) {
                     _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到正确答案，自动全选';
                     for (let option in quu['options']) {
@@ -2195,7 +2640,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                         filledCount++;
                     }
                     if (filledCount > 0) {
-                        onAnswerMatched();
+                        handleAnswerMatched();
                     }
                 }
                 break;
@@ -2203,6 +2648,8 @@ function applyQuestionAnswer(res, quu, contextObj) {
         }
     } catch (e) {
         console.log(e);
+    } finally {
+        recordWorkResult();
     }
 }
 
@@ -2408,9 +2855,11 @@ function initCardsPage() {
                         'done': false,
                         'running': false
                     };
+                    const vObjId = (item['property'] && item['property']['objectid']) || item['objectid'] || '';
+                    const vDownloadLink = vObjId ? `<a href="https://d0.ananas.chaoxing.com/download/${vObjId}" target="_blank" rel="noopener" style="float:right;font-size:12px;color:#337ab7;text-decoration:none;" title="下载原始资源">下载</a>` : '';
                     _d.getElementById('joblist').innerHTML += `
                         <div class="panel panel-default">
-                            <div class="panel-body">[视频] ${item['property']['name']}</div>
+                            <div class="panel-body">${vDownloadLink}[视频] ${item['property']['name']}</div>
                         </div>`;
                 } catch (e) { }
             },
@@ -2632,6 +3081,17 @@ function initCardsPage() {
         missionList['m' + item['jobid']]['running'] = true;
         logs.addLog('开始刷章节测试：' + item['name']);
         logs.addLog('您设置的答题合格正确率为：' + String(accuracy) + '%，只有达到此标准才会自动提交', 'blue');
+
+        // 重置并展示答题结果速览面板
+        _w.top.unrivalWorkResults = [];
+        const quizSummaryPanel = _d.getElementById('quizSummaryPanel');
+        if (quizSummaryPanel) {
+            quizSummaryPanel.style.display = 'block';
+        }
+        if (typeof renderQuizSummary === 'function') {
+            renderQuizSummary([]);
+        }
+
         _d.getElementById('workPanel').style.display = 'block';
         _d.getElementById('frame_content').src = _p + '//' + _h + '/work/phone/work?workId=' + item['jobid']
             .replace('work-', '') + '&courseId=' + courseId + '&clazzId=' + classIdFromData + '&knowledgeId=' +
@@ -2639,10 +3099,17 @@ function initCardsPage() {
         _w.top.unrivalWorkInfo = '';
         _w.top.unrivalDoneWorkId = '';
 
+        let lastResultsLen = 0;
         let workInfoTimer = setInterval(function () {
             if (_w.top.unrivalWorkInfo != '') {
                 logs.addLog(_w.top.unrivalWorkInfo);
                 _w.top.unrivalWorkInfo = '';
+            }
+            if (Array.isArray(_w.top.unrivalWorkResults) && _w.top.unrivalWorkResults.length !== lastResultsLen) {
+                lastResultsLen = _w.top.unrivalWorkResults.length;
+                if (typeof renderQuizSummary === 'function') {
+                    renderQuizSummary(_w.top.unrivalWorkResults);
+                }
             }
         }, 100);
 
@@ -2670,6 +3137,9 @@ function initCardsPage() {
                 clearInterval(workInfoTimer);
                 clearInterval(checkcross);
                 _w.top.unrivalDoneWorkId = '';
+                if (Array.isArray(_w.top.unrivalWorkResults) && typeof renderQuizSummary === 'function') {
+                    renderQuizSummary(_w.top.unrivalWorkResults);
+                }
                 _d.getElementById('workPanel').style.display = 'none';
                 _d.getElementById('frame_content').src = '';
                 setTimeout(function () {
@@ -2696,6 +3166,8 @@ function initCardsPage() {
         if (item['type'] === 'video') {
             video_getReady(item);
         } else if (item['type'] === 'document') {
+            const dObjId = (item['property'] && item['property']['objectid']) || item['objectid'] || '';
+            const dDownloadLink = dObjId ? `<a href="https://d0.ananas.chaoxing.com/download/${dObjId}" target="_blank" rel="noopener" style="float:right;font-size:12px;color:#337ab7;text-decoration:none;" title="下载原始资源">下载</a>` : '';
             missionList['m' + item['jobid']] = {
                 'type': 'document',
                 'jtoken': item['jtoken'],
@@ -2706,7 +3178,7 @@ function initCardsPage() {
             };
             _d.getElementById('joblist').innerHTML += `
                 <div class="panel panel-default">
-                    <div class="panel-body">[文档] ${item['property']['name']}</div>
+                    <div class="panel-body">${dDownloadLink}[文档] ${item['property']['name']}</div>
                 </div>`;
         } else if (item['type'] === 'workid' && _w.top.unrivalDoWork == '1') {
             missionList['m' + item['jobid']] = {
@@ -3009,6 +3481,10 @@ function initHomeWorkPage() {
     const wIdE = _d.getElementById('workLibraryId') || _d.getElementById('oldWorkId');
     const wid = wIdE ? wIdE.value : '';
 
+    if (_w.top) {
+        _w.top.unrivalWorkResults = [];
+    }
+
     _w.top.unrivalWorkDone = false;
     _w.aalert = _w.alert;
     _w.alert = (msg) => {
@@ -3026,96 +3502,98 @@ function initHomeWorkPage() {
     }
     _w.confirm = (msg) => true;
 
-    const questionList = parseQuestionsFromDom();
-    const questionsElement = _d.getElementsByClassName('Py-mian1');
-    let questionNum = questionList.length;
-    const totalQuestionNum = questionNum; // 记录总题目数
+    decryptFontIfNeeded(() => {
+        const questionList = parseQuestionsFromDom();
+        const questionsElement = _d.getElementsByClassName('Py-mian1');
+        let questionNum = questionList.length;
+        const totalQuestionNum = questionNum; // 记录总题目数
 
-    let nowTime = -4000;
-    let busyThread = questionList.length;
-    const curRandomDo = (_w.top && _w.top.unrivalRandomDo !== undefined) ? _w.top.unrivalRandomDo : parseInt(GM_getValue('unrivalrandomdo', '1'), 10);
-    const curAccuracy = GM_getValue('accuracy', 60);
+        let nowTime = -4000;
+        let busyThread = questionList.length;
+        const curRandomDo = (_w.top && _w.top.unrivalRandomDo !== undefined) ? _w.top.unrivalRandomDo : parseInt(GM_getValue('unrivalrandomdo', '1'), 10);
+        const curAccuracy = GM_getValue('accuracy', 60);
 
-    const onSingleAnswerCompleted = (res, quu) => {
-        busyThread -= 1;
-        const choiceEs = _d.getElementsByTagName('li');
-        const cleanQId = quu['questionid'].replace('answer', '');
+        const onSingleAnswerCompleted = (res, quu) => {
+            busyThread -= 1;
+            const choiceEs = _d.getElementsByTagName('li');
+            const cleanQId = quu['questionid'].replace('answer', '');
 
-        applyQuestionAnswer(res, quu, {
-            choiceEs,
-            cleanQId,
-            questionsElement,
-            curRandomDo,
-            curAccuracy,
-            onAnswerMatched: () => {
-                questionNum -= 1;
-            }
-        });
-    };
-
-    // 独立局部 const qu 避免异步循环闭包变量污染
-    for (let i = 0, l = questionList.length; i < l; i++) {
-        nowTime += parseInt(Math.random() * 2000 + 2500, 10);
-        setTimeout(function () {
-            const qu = questionList[i];
-            searchQuestionAnswer(qu, function (resultData) {
-                onSingleAnswerCompleted(resultData, qu);
-            }, wid);
-        }, nowTime);
-    }
-
-    const workInterval = setInterval(function () {
-        if (busyThread > 0) return;
-        clearInterval(workInterval);
-
-        // 正确率计算与 NaN 保护
-        let currentAccuracy = totalQuestionNum > 0 ? Math.floor(((totalQuestionNum - questionNum) / totalQuestionNum) * 100) : 100;
-
-        if (currentAccuracy >= curAccuracy && _w.top.unrivalAutoSubmit == '1') {
-            _w.top.unrivalDoneWorkId = getQueryVariable('workId');
-            _w.top.unrivalWorkInfo = '正确率符合标准 (' + currentAccuracy + '% >= ' + curAccuracy + '%)，已提交测试';
-            setTimeout(function () {
-                if (typeof _w.submitCheckTimes === 'function') _w.submitCheckTimes();
-                else if (typeof submitCheckTimes === 'function') submitCheckTimes();
-
-                if (typeof _w.escapeBlank === 'function') _w.escapeBlank();
-                else if (typeof escapeBlank === 'function') escapeBlank();
-
-                if (typeof _w.submitAction === 'function') _w.submitAction();
-                else if (typeof submitAction === 'function') submitAction();
-
-                // 60秒仅做日志提示，不强行清空 iframe 或擅自改动状态
-                setTimeout(function () {
-                    if (!_w.top.unrivalWorkDone) {
-                        _w.top.unrivalWorkInfo = '提示：测验提交操作已等待超过60秒，如页面未自动跳转请手动确认。';
-                    }
-                }, 60000);
-            }, parseInt(Math.random() * 2000 + 3000, 10));
-        } else if (_w.top.unrivalAutoSave == '1') {
-            _w.top.unrivalWorkInfo = '正确率(' + currentAccuracy + '%)未达提交标准或未开启自动提交，已自动保存答案';
-            setTimeout(function () {
-                _w.top.unrivalDoneWorkId = getQueryVariable('workId');
-                if (typeof _w.noSubmit === 'function') {
-                    _w.noSubmit();
-                } else if (typeof noSubmit === 'function') {
-                    noSubmit();
+            applyQuestionAnswer(res, quu, {
+                choiceEs,
+                cleanQId,
+                questionsElement,
+                curRandomDo,
+                curAccuracy,
+                onAnswerMatched: () => {
+                    questionNum -= 1;
                 }
-                setTimeout(function () {
-                    if (!_w.top.unrivalWorkDone) {
-                        _w.top.unrivalWorkInfo = '提示：测验保存操作已等待超过60秒，如未提示保存成功请手动确认。';
-                    }
-                }, 60000);
-            }, 2000);
-        } else {
-            _w.top.unrivalWorkInfo = '当前正确率：' + currentAccuracy + '%，用户设置为不自动保存，请手动处理作业';
+            });
+        };
+
+        // 独立局部 const qu 避免异步循环闭包变量污染
+        for (let i = 0, l = questionList.length; i < l; i++) {
+            nowTime += parseInt(Math.random() * 2000 + 2500, 10);
+            setTimeout(function () {
+                const qu = questionList[i];
+                searchQuestionAnswer(qu, function (resultData) {
+                    onSingleAnswerCompleted(resultData, qu);
+                }, wid);
+            }, nowTime);
         }
-    }, 1000);
+
+        const workInterval = setInterval(function () {
+            if (busyThread > 0) return;
+            clearInterval(workInterval);
+
+            // 正确率计算与 NaN 保护
+            let currentAccuracy = totalQuestionNum > 0 ? Math.floor(((totalQuestionNum - questionNum) / totalQuestionNum) * 100) : 100;
+
+            if (currentAccuracy >= curAccuracy && _w.top.unrivalAutoSubmit == '1') {
+                _w.top.unrivalDoneWorkId = getQueryVariable('workId');
+                _w.top.unrivalWorkInfo = '正确率符合标准 (' + currentAccuracy + '% >= ' + curAccuracy + '%)，已提交测试';
+                setTimeout(function () {
+                    if (typeof _w.submitCheckTimes === 'function') _w.submitCheckTimes();
+                    else if (typeof submitCheckTimes === 'function') submitCheckTimes();
+
+                    if (typeof _w.escapeBlank === 'function') _w.escapeBlank();
+                    else if (typeof escapeBlank === 'function') escapeBlank();
+
+                    if (typeof _w.submitAction === 'function') _w.submitAction();
+                    else if (typeof submitAction === 'function') submitAction();
+
+                    // 60秒仅做日志提示，不强行清空 iframe 或擅自改动状态
+                    setTimeout(function () {
+                        if (!_w.top.unrivalWorkDone) {
+                            _w.top.unrivalWorkInfo = '提示：测验提交操作已等待超过60秒，如页面未自动跳转请手动确认。';
+                        }
+                    }, 60000);
+                }, parseInt(Math.random() * 2000 + 3000, 10));
+            } else if (_w.top.unrivalAutoSave == '1') {
+                _w.top.unrivalWorkInfo = '正确率(' + currentAccuracy + '%)未达提交标准或未开启自动提交，已自动保存答案';
+                setTimeout(function () {
+                    _w.top.unrivalDoneWorkId = getQueryVariable('workId');
+                    if (typeof _w.noSubmit === 'function') {
+                        _w.noSubmit();
+                    } else if (typeof noSubmit === 'function') {
+                        noSubmit();
+                    }
+                    setTimeout(function () {
+                        if (!_w.top.unrivalWorkDone) {
+                            _w.top.unrivalWorkInfo = '提示：测验保存操作已等待超过60秒，如未提示保存成功请手动确认。';
+                        }
+                    }, 60000);
+                }, 2000);
+            } else {
+                _w.top.unrivalWorkInfo = '当前正确率：' + currentAccuracy + '%，用户设置为不自动保存，请手动处理作业';
+            }
+        }, 1000);
+    });
 }
 
 
     // ==================== 模块: pages/misc.js ====================
 // ==========================================
-// 路由模块: 其他次要页面 (已批阅页、学习统计)
+// 路由模块: 其他次要页面 (已批阅页、学习统计、课程章节统计)
 // ==========================================
 
 function initMiscPages() {
@@ -3133,6 +3611,58 @@ function initMiscPages() {
         setInterval(function () {
             _l.reload();
         }, 90000);
+    } else if (_l.pathname.includes('/mycourse/studentcourse')) {
+        try {
+            const getParam = (key) => {
+                const params = new URLSearchParams(_l.search);
+                return params.get(key) || params.get(key.toLowerCase()) || params.get(key.toUpperCase()) || '';
+            };
+
+            const cId = getParam('courseId') || getParam('courseid');
+            const clId = getParam('clazzId') || getParam('clazzid');
+            let uid = UID || getParam('cpi') || getParam('userId') || getParam('uid') || (typeof getCookie === 'function' ? (getCookie('_uid') || getCookie('UID')) : '') || '';
+
+            const statUrl = `${_p}//${_h}/moocAnalysis/chapterStatisticByUser?courseId=${cId}&clazzid=${clId}${uid ? '&userId=' + uid : ''}`;
+
+            const injectStatLink = () => {
+                try {
+                    const ztLogo = _d.querySelector('.zt_logo') || _d.querySelector('.course_title') || _d.querySelector('.cur_title');
+                    if (!ztLogo) return;
+
+                    const totalItems = _d.querySelectorAll('.chapter_item, .icon').length;
+                    const unfinishedItems = _d.querySelectorAll('em:not(.openlock)').length;
+                    let statText = '📊 章节统计';
+                    if (unfinishedItems > 0) {
+                        statText += ` (待完成: ${unfinishedItems})`;
+                    } else if (totalItems > 0) {
+                        statText += ` (已全部完成)`;
+                    }
+
+                    let statLink = _d.getElementById('cxCourseStatLink');
+                    if (!statLink) {
+                        statLink = _d.createElement('a');
+                        statLink.id = 'cxCourseStatLink';
+                        statLink.target = '_blank';
+                        statLink.rel = 'noopener';
+                        statLink.title = '点击打开课程章节学习统计';
+                        statLink.style.cssText = 'margin-left: 12px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 14px; font-size: 12px; font-weight: 500; text-decoration: none; vertical-align: middle; cursor: pointer; transition: all 0.2s;';
+                        statLink.onmouseover = function () { this.style.backgroundColor = '#dbeafe'; };
+                        statLink.onmouseout = function () { this.style.backgroundColor = '#eff6ff'; };
+                        ztLogo.parentNode.insertBefore(statLink, ztLogo.nextSibling);
+                    }
+                    statLink.href = statUrl;
+                    statLink.innerText = statText;
+                } catch (err) {
+                    console.error('[StatLink Inject Error]', err);
+                }
+            };
+
+            injectStatLink();
+            setTimeout(injectStatLink, 1000);
+            setTimeout(injectStatLink, 3000);
+        } catch (e) {
+            console.error('[initMiscPages studentcourse error]', e);
+        }
     }
 }
 
@@ -3148,6 +3678,8 @@ if (_l.href.indexOf("knowledge/cards") > 0) {
     initStudentStudyPage();
 } else if (_l.href.indexOf("work/phone/doHomeWork") > 0) {
     initHomeWorkPage();
+} else if (_l.pathname.includes("/mycourse/studentcourse")) {
+    initMiscPages();
 } else {
     initMiscPages();
 }

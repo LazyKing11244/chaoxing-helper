@@ -8,6 +8,8 @@ if (_l.href.indexOf("knowledge/cards") > 0) {
     initStudentStudyPage();
 } else if (_l.href.indexOf("work/phone/doHomeWork") > 0) {
     initHomeWorkPage();
+} else if (_l.pathname.includes("/mycourse/studentcourse")) {
+    initMiscPages();
 } else {
     initMiscPages();
 }

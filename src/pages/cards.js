@@ -198,9 +198,11 @@ function initCardsPage() {
                         'done': false,
                         'running': false
                     };
+                    const vObjId = (item['property'] && item['property']['objectid']) || item['objectid'] || '';
+                    const vDownloadLink = vObjId ? `<a href="https://d0.ananas.chaoxing.com/download/${vObjId}" target="_blank" rel="noopener" style="float:right;font-size:12px;color:#337ab7;text-decoration:none;" title="下载原始资源">下载</a>` : '';
                     _d.getElementById('joblist').innerHTML += `
                         <div class="panel panel-default">
-                            <div class="panel-body">[视频] ${item['property']['name']}</div>
+                            <div class="panel-body">${vDownloadLink}[视频] ${item['property']['name']}</div>
                         </div>`;
                 } catch (e) { }
             },
@@ -422,6 +424,17 @@ function initCardsPage() {
         missionList['m' + item['jobid']]['running'] = true;
         logs.addLog('开始刷章节测试：' + item['name']);
         logs.addLog('您设置的答题合格正确率为：' + String(accuracy) + '%，只有达到此标准才会自动提交', 'blue');
+
+        // 重置并展示答题结果速览面板
+        _w.top.unrivalWorkResults = [];
+        const quizSummaryPanel = _d.getElementById('quizSummaryPanel');
+        if (quizSummaryPanel) {
+            quizSummaryPanel.style.display = 'block';
+        }
+        if (typeof renderQuizSummary === 'function') {
+            renderQuizSummary([]);
+        }
+
         _d.getElementById('workPanel').style.display = 'block';
         _d.getElementById('frame_content').src = _p + '//' + _h + '/work/phone/work?workId=' + item['jobid']
             .replace('work-', '') + '&courseId=' + courseId + '&clazzId=' + classIdFromData + '&knowledgeId=' +
@@ -429,10 +442,17 @@ function initCardsPage() {
         _w.top.unrivalWorkInfo = '';
         _w.top.unrivalDoneWorkId = '';
 
+        let lastResultsLen = 0;
         let workInfoTimer = setInterval(function () {
             if (_w.top.unrivalWorkInfo != '') {
                 logs.addLog(_w.top.unrivalWorkInfo);
                 _w.top.unrivalWorkInfo = '';
+            }
+            if (Array.isArray(_w.top.unrivalWorkResults) && _w.top.unrivalWorkResults.length !== lastResultsLen) {
+                lastResultsLen = _w.top.unrivalWorkResults.length;
+                if (typeof renderQuizSummary === 'function') {
+                    renderQuizSummary(_w.top.unrivalWorkResults);
+                }
             }
         }, 100);
 
@@ -460,6 +480,9 @@ function initCardsPage() {
                 clearInterval(workInfoTimer);
                 clearInterval(checkcross);
                 _w.top.unrivalDoneWorkId = '';
+                if (Array.isArray(_w.top.unrivalWorkResults) && typeof renderQuizSummary === 'function') {
+                    renderQuizSummary(_w.top.unrivalWorkResults);
+                }
                 _d.getElementById('workPanel').style.display = 'none';
                 _d.getElementById('frame_content').src = '';
                 setTimeout(function () {
@@ -486,6 +509,8 @@ function initCardsPage() {
         if (item['type'] === 'video') {
             video_getReady(item);
         } else if (item['type'] === 'document') {
+            const dObjId = (item['property'] && item['property']['objectid']) || item['objectid'] || '';
+            const dDownloadLink = dObjId ? `<a href="https://d0.ananas.chaoxing.com/download/${dObjId}" target="_blank" rel="noopener" style="float:right;font-size:12px;color:#337ab7;text-decoration:none;" title="下载原始资源">下载</a>` : '';
             missionList['m' + item['jobid']] = {
                 'type': 'document',
                 'jtoken': item['jtoken'],
@@ -496,7 +521,7 @@ function initCardsPage() {
             };
             _d.getElementById('joblist').innerHTML += `
                 <div class="panel panel-default">
-                    <div class="panel-body">[文档] ${item['property']['name']}</div>
+                    <div class="panel-body">${dDownloadLink}[文档] ${item['property']['name']}</div>
                 </div>`;
         } else if (item['type'] === 'workid' && _w.top.unrivalDoWork == '1') {
             missionList['m' + item['jobid']] = {
