@@ -3,8 +3,7 @@
 // ==========================================
 
 function initCardsPage() {
-    let allowBackground = false,
-        spans = _d.getElementsByTagName('span');
+    let spans = _d.getElementsByTagName('span');
     for (let i = 0, l = spans.length; i < l; i++) {
         if (spans[i].innerHTML.indexOf('章节未开放') !== -1) {
             if (_l.href.indexOf("ut=s") !== -1) {
@@ -49,11 +48,6 @@ function initCardsPage() {
     const loopjob = () => {
         if (_w.top.unrivalScriptList && _w.top.unrivalScriptList.length > 1) {
             logs.addLog('您同时开启了多个刷课脚本，可能导致异常记录！', 'red');
-        }
-        if (cVersion < 8.6 * 10) {
-            logs.addLog('您的浏览器内核过老，请更新浏览器或者使用火狐/Edge浏览器', 'red');
-            stop = true;
-            return;
         }
         if (stop) return;
 
@@ -101,10 +95,10 @@ function initCardsPage() {
     const readyCheck = () => {
         setTimeout(function () {
             try {
-                if (!isCat) {
-                    logs.addLog('推荐使用 <a href="https://docs.scriptcat.org/use/#%E5%AE%89%E8%A3%85%E6%8F%92%E4%BB%B6" target="_blank">ScriptCat 脚本猫</a> 运行本脚本以获得最佳体验', 'orange');
-                }
                 let isBgActive = (_w.top && _w.top.backNow == 1) || GM_getValue('unrivalbacknow', '0') === '1';
+                if (isBgActive) {
+                    if (typeof keepAliveAudio !== 'undefined') keepAliveAudio.start();
+                }
                 let bgBtn = _d.getElementById('backGround');
                 if (bgBtn) {
                     bgBtn.setAttribute('class', isBgActive ? 'btn btn-success btn-sm' : 'btn btn-default btn-sm');
@@ -231,26 +225,6 @@ function initCardsPage() {
             }, 5000);
             return;
         }
-        if (allowBackground && backGround) {
-            if (_w.top.document.getElementsByClassName('catalog_points_sa').length > 0 || _w.top.document.getElementsByClassName('lock').length > 0) {
-                logs.addLog('您已安装超星挂机小助手，但此课程可能为闯关模式，不支持后台挂机，将为您在线完成', 'blue');
-            } else {
-                item['userid'] = UID;
-                item['classId'] = classIdFromData;
-                item['review'] = [false, true][_w.top.unrivalReviewMode];
-                item['reportUrl'] = reportUrl;
-                item['rt'] = missionList['m' + item['jobid']]['rt'];
-                GM_setValue('unrivalBackgroundVideo', item);
-                _d.cookie = "videojs_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                logs.addLog('您已安装超星挂机小助手，已添加至后台任务，<a href="unrivalxxtbackground/" target="view_window">点我查看</a>', 'green');
-                missionList['m' + item['jobid']]['running'] = true;
-                setTimeout(function () {
-                    missionList['m' + item['jobid']]['running'] = false;
-                    missionList['m' + item['jobid']]['done'] = true;
-                }, 5000);
-                return;
-            }
-        }
         let videojs_id = String(parseInt(Math.random() * 9999999));
         _d.cookie = 'videojs_id=' + videojs_id + ';path=/';
         logs.addLog('开始学习：' + item['name'] + '，倍速：' + String(rate) + '倍');
@@ -271,9 +245,11 @@ function initCardsPage() {
             isdrag = '3',
             times = 0,
             first = true,
-            loop = setInterval(function () {
+            lastTickTime = Date.now(),
+            lastReportTime = 0,
+            loop = createWorkerTimer(function () {
                 if (rate <= 0) {
-                    clearInterval(loop);
+                    loop.stop();
                     logs.addLog('倍速不合法，视频已跳过', 'orange');
                     setTimeout(function () {
                         missionList['m' + item['jobid']]['running'] = false;
@@ -284,12 +260,18 @@ function initCardsPage() {
                 rt = isAudio ? '' : (missionList['m' + item['jobid']]['rt'] || '0.9');
                 dtype = isAudio ? 'Audio' : 'Video';
 
-                playsTime += rate;
-                playTime = Math.ceil(playsTime);
-                if (times === 0 || times % 30 === 0 || playTime >= item['duration']) {
+                let now = Date.now();
+                let deltaSec = (now - lastTickTime) / 1000;
+                lastTickTime = now;
+                if (deltaSec <= 0 || deltaSec > 5) deltaSec = 1;
+                playsTime += deltaSec * rate;
+                playTime = Math.min(item['duration'], Math.ceil(playsTime));
+
+                if (first || playTime >= item['duration'] || now - lastReportTime >= 29500 || times === 0 || times % 30 === 0) {
+                    lastReportTime = now;
                     if (first) playTime = 0;
                     if (playTime >= item['duration']) {
-                        clearInterval(loop);
+                        loop.stop();
                         playTime = item['duration'];
                         isdrag = '4';
                     } else if (playTime > 0) {
@@ -341,7 +323,7 @@ function initCardsPage() {
                                 GM_setValue('unrivaltimelong', timelong);
                                 busyThread -= 1;
                                 if (timelong[UID]['time'] / 60 > 22 && item['doublespeed'] === 0 && _w.top.unrivalReviewMode == '0') {
-                                    clearInterval(loop);
+                                    loop.stop();
                                     logs.addLog('今日学习时间过长，已暂停，建议明日继续学习', 'red');
                                     setTimeout(function () {
                                         missionList['m' + item['jobid']]['running'] = false;
@@ -355,7 +337,7 @@ function initCardsPage() {
                                     logs.addLog('视频任务已完成', 'green');
                                     missionList['m' + item['jobid']]['running'] = false;
                                     missionList['m' + item['jobid']]['done'] = true;
-                                    clearInterval(loop);
+                                    loop.stop();
                                     return;
                                 } else if (isdrag === '4') {
                                     if (_w.top.unrivalReviewMode == '1') {
@@ -366,7 +348,7 @@ function initCardsPage() {
                                     missionList['m' + item['jobid']]['running'] = false;
                                     missionList['m' + item['jobid']]['done'] = true;
                                     try {
-                                        clearInterval(loop);
+                                        loop.stop();
                                     } catch (e) { }
                                 } else {
                                     logs.addLog(item['name'] + ' 已观看 ' + _bold_playTime + ' 秒，剩余大约 ' + String(item['duration'] - _bold_playTime) + ' 秒');
@@ -375,7 +357,7 @@ function initCardsPage() {
                                 if (res.responseText && res.responseText.indexOf('验证码') >= 0) {
                                     logs.addLog('已被超星风控，请 <a href="' + reportsUrl + '" target="_blank">点击此处手动处理</a>，60秒后自动刷新', 'red');
                                     missionList['m' + item['jobid']]['running'] = false;
-                                    clearInterval(loop);
+                                    loop.stop();
                                     stop = true;
                                     setTimeout(function () { _l.reload(); }, 60000);
                                     return;
@@ -388,7 +370,7 @@ function initCardsPage() {
                             busyThread -= 1;
                             logs.addLog('观看任务汇报失败：' + (err.error || '网络错误'), 'red');
                             missionList['m' + item['jobid']]['running'] = false;
-                            clearInterval(loop);
+                            loop.stop();
                         },
                         ontimeout: function () {
                             busyThread -= 1;
@@ -471,10 +453,10 @@ function initCardsPage() {
             }
         }, 2000);
 
-        let workDoneInterval = setInterval(function () {
+        let workDoneInterval = createWorkerTimer(function () {
             if (_w.top.unrivalWorkDone) {
                 _w.top.unrivalWorkDone = false;
-                clearInterval(workDoneInterval);
+                workDoneInterval.stop();
                 clearInterval(workInfoTimer);
                 clearInterval(checkcross);
                 _w.top.unrivalDoneWorkId = '';

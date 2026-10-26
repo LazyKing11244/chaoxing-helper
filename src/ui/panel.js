@@ -5,217 +5,499 @@
 const CARDS_PANEL_HTML = `
 <!DOCTYPE html>
 <html lang="zh-CN">
-    <head>
-        <meta charset="UTF-8">
-        <title>学习通小助手 - 2026重构版</title>
-        <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport">
-        <link href="https://z.chaoxing.com/yanshi/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body>
-        <div class="row" style="margin: 10px;">
-            <div class="col-md-6 col-md-offset-3">
-                <div class="header clearfix">
-                    <h3 class="text-muted" style="margin-top: 20px;margin-bottom: 0;float: left;">
-                        <a href="https://github.com/LazyKing11244/chaoxing-helper" target="_blank" style="color: #337ab7; text-decoration: none;">学习通小助手 v5.0.4 (2026维护版)</a>
-                    </h3>
-                </div>
-                <hr style="margin-top: 10px;margin-bottom: 20px;">
+<head>
+    <meta charset="UTF-8">
+    <title>超星学习通助手 Next v5.0.5</title>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 16px;
+            background: #f4f6f8;
+            color: #1e293b;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        a { text-decoration: none; }
+        .cx-container {
+            max-width: 1180px;
+            margin: 0 auto;
+        }
+        .cx-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #ffffff;
+            border: 1px solid #dce1e7;
+            border-radius: 6px;
+            padding: 10px 16px;
+            margin-bottom: 12px;
+        }
+        .cx-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #0f172a;
+            margin: 0;
+        }
+        .cx-title a { color: #0f172a; }
+        .cx-title a:hover { color: #2563eb; }
+        .cx-warn {
+            font-size: 12px;
+            color: #b45309;
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+        .cx-grid {
+            display: grid;
+            grid-template-columns: 480px 1fr;
+            gap: 12px;
+            align-items: start;
+        }
+        @media (max-width: 920px) {
+            .cx-grid { grid-template-columns: 1fr; }
+        }
+        .cx-col {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+        }
+        .cx-card {
+            background: #ffffff;
+            border: 1px solid #dce1e7;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .cx-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 9px 14px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            font-size: 13px;
+            color: #334155;
+        }
+        .cx-card-body {
+            padding: 12px 14px;
+        }
+        .cx-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 7px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .cx-row:first-child { padding-top: 0; }
+        .cx-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .cx-label {
+            width: 88px;
+            flex-shrink: 0;
+            color: #475569;
+            font-weight: 500;
+        }
+        .form-control {
+            height: 28px;
+            padding: 3px 8px;
+            font-size: 13px;
+            color: #1e293b;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            outline: none;
+        }
+        .form-control:focus {
+            border-color: #2563eb;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 28px;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 500;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .btn-xs {
+            height: 22px;
+            padding: 0 8px;
+            font-size: 11px;
+        }
+        .btn-default {
+            background: #f8fafc;
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+        .btn-default:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+        .btn-success {
+            background: #16a34a;
+            color: #ffffff !important;
+            border-color: #15803d;
+        }
+        .btn-success:hover {
+            background: #15803d;
+        }
+        .btn-primary {
+            background: #2563eb;
+            color: #ffffff !important;
+            border-color: #1d4ed8;
+        }
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        .btn-info {
+            background: #0284c7;
+            color: #ffffff !important;
+            border-color: #0369a1;
+        }
+        .btn-info:hover {
+            background: #0369a1;
+        }
+        .text-muted {
+            color: #64748b;
+            font-size: 12px;
+        }
+        /* Tabs */
+        .cx-tabs {
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+        }
+        .cx-tab {
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #475569;
+            background: #f1f5f9;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .cx-tab:hover {
+            color: #0f172a;
+        }
+        .cx-tab.active {
+            color: #2563eb;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+            font-weight: 600;
+        }
+        .cx-tab-pane { display: none; }
+        .cx-tab-pane.active { display: block; }
+        .cx-field {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .cx-field-label {
+            width: 72px;
+            flex-shrink: 0;
+            color: #475569;
+            font-size: 12px;
+        }
+        /* Joblist items compatible with cards.js */
+        #joblist {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        #joblist:empty::before {
+            content: "暂无待处理任务或正在加载...";
+            color: #94a3b8;
+            font-size: 12px;
+        }
+        #joblist .panel {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            margin-bottom: 6px;
+        }
+        #joblist .panel:last-child { margin-bottom: 0; }
+        #joblist .panel-body {
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #334155;
+        }
+        /* Log Console */
+        #result {
+            overflow: hidden;
+        }
+        #log {
+            height: 340px;
+            overflow-y: auto;
+            background: #fcfcfd;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-family: Consolas, "Microsoft YaHei", monospace;
+            font-size: 12.5px;
+            line-height: 1.65;
+            word-break: break-all;
+        }
+        #workPanel {
+            grid-column: 1 / -1;
+            height: 760px;
+        }
+    </style>
+</head>
+<body>
+    <div class="cx-container">
+        <div class="cx-topbar">
+            <h3 class="cx-title">
+                <a href="https://github.com/LazyKing11244/chaoxing-helper" target="_blank">超星学习通助手 Next v5.0.5</a>
+            </h3>
+            <span class="cx-warn">提示：高倍速有清进度风险，建议 1 倍速运行</span>
+        </div>
 
-                <div class="panel panel-info" id='remarks'>
-                    <div class="panel-heading">脚本维护说明</div>
-                    <div class="panel-body">
-                        <p><strong>超星学习通小助手 2026 重构维护版 (v5.0.3)</strong></p>
-                        <p>1. 重构题库答案匹配引擎：深度优化单选/多选/判断题文本与选项字母匹配，杜绝字符误判与长短选项误包含；</p>
-                        <p>2. 修复测验自动保存卡死与提交作用域隔离 Bug，增加多重完成延时兜底机制；</p>
-                        <p>3. 修复视频/任务详情网络异常与超时导致 busyThread 线程死锁，增强跳章健壮性；</p>
-                        <p>4. 填空题增强多空智能拆分匹配（支持 ###、===、# 等分隔符）。</p>
+        <div class="cx-grid">
+            <!-- 左栏：控制与配置 -->
+            <div class="cx-col">
+                <div class="cx-card" id="normalQuery">
+                    <div class="cx-card-header">
+                        <span>任务与运行配置</span>
+                    </div>
+                    <div class="cx-card-body">
+                        <div class="cx-row">
+                            <span class="cx-label">视频与挂机</span>
+                            <input type="number" id="unrivalRate" style="width: 58px;" class="form-control" title="播放倍速">
+                            <a id="updateRateButton" class="btn btn-primary btn-sm">修改倍速</a>
+                            <a id="reviewModeButton" class="btn btn-default btn-sm">复习模式</a>
+                            <a id="backGround" class="btn btn-default btn-sm">激活挂机</a>
+                        </div>
+
+                        <div class="cx-row">
+                            <span class="cx-label">章节测试</span>
+                            <a id="autoDoWorkButton" class="btn btn-default btn-sm">自动答题</a>
+                            <a id="autoSubmitButton" class="btn btn-default btn-sm">自动提交</a>
+                            <a id="autoSaveButton" class="btn btn-default btn-sm">自动保存</a>
+                        </div>
+
+                        <div class="cx-row">
+                            <span class="cx-label">合格正确率</span>
+                            <input type="number" id="accuracy" style="width: 58px;" class="form-control">
+                            <span class="text-muted">%</span>
+                            <a id="updateaccuracy" class="btn btn-primary btn-sm">修改正确率</a>
+                            <span class="text-muted" style="margin-left: 4px;">达标才自动提交</span>
+                        </div>
+
+                        <div class="cx-row">
+                            <span class="cx-label">跳转与策略</span>
+                            <select id="unrivalJumpTypeSelect" class="form-control" style="width: 124px;">
+                                <option value="1">遍历模式 (推荐)</option>
+                                <option value="0">智能模式</option>
+                                <option value="2">不跳转</option>
+                            </select>
+                            <a id="disableMonitorButton" class="btn btn-default btn-sm" title="解除多端学习监控">解除多端监控: 关</a>
+                            <a id="randomDoButton" class="btn btn-default btn-sm" title="无答案时自动盲猜">无答案盲猜: 开</a>
+                        </div>
                     </div>
                 </div>
 
-                <div class="panel panel-info" id="normalQuery">
-                    <div class="panel-heading">任务配置</div>
-                    <div class="panel-body">
-                        <div>
-                            <span class="text-warning">提示：高倍速有清进度风险，建议一倍速运行。</span><br/>
-                            <div style="margin-top: 8px;">
-                                <span style="font-size: 15px;">视频倍速：</span>
-                                <input type="number" id="unrivalRate" style="width: 70px; display: inline-block;" class="form-control input-sm">
-                                &nbsp;
-                                <a id='updateRateButton' class="btn btn-primary btn-sm" style="color: white;">修改倍速</a>
-                                &nbsp;|&nbsp;
-                                <a id='reviewModeButton' class="btn btn-default btn-sm">复习模式</a>
-                                &nbsp;|&nbsp;
-                                <a id='fuckMeModeButton' class="btn btn-default btn-sm" href="https://scriptcat.org/zh-CN/script-show-page/379" target="_blank">常见问题</a>
-                                &nbsp;
-                                <a id='backGround' class="btn btn-default btn-sm">激活挂机</a>
-                            </div>
-
-                            <hr style="margin: 10px 0;">
-
-                            <div>
-                                <span style="font-size: 15px;">章节测试：</span>
-                                <a id='autoDoWorkButton' class="btn btn-default btn-sm">自动答题</a>&nbsp;|&nbsp;
-                                <a id='autoSubmitButton' class="btn btn-default btn-sm">自动提交</a>&nbsp;|&nbsp;
-                                <a id='autoSaveButton' class="btn btn-default btn-sm">自动保存</a>
-                            </div>
-
-                            <div style="margin-top: 8px;">
-                                <span style="font-size: 15px;">合格正确率(%)：</span>
-                                <input type="number" id="accuracy" style="width: 70px; display: inline-block;" class="form-control input-sm">
-                                &nbsp;
-                                <a id='updateaccuracy' class="btn btn-primary btn-sm" style="color: white;">修改正确率</a>
-                                <span class="text-muted" style="font-size: 12px; margin-left: 8px;">正确率高于此值且允许自动提交时才会提交答案</span>
-                            </div>
-
-                            <hr style="margin: 10px 0;">
-
-                            <div>
-                                <span style="font-size: 15px;">跳转与运行模式：</span>
-                                <select id="unrivalJumpTypeSelect" class="form-control input-sm" style="width: 140px; display: inline-block;">
-                                    <option value="1">遍历模式 (推荐)</option>
-                                    <option value="0">智能模式</option>
-                                    <option value="2">不跳转</option>
-                                </select>
-                                &nbsp;&nbsp;
-                                <a id='disableMonitorButton' class="btn btn-default btn-sm" title="解除多端学习监控">解除多端监控: 关</a>
-                                &nbsp;&nbsp;
-                                <a id='randomDoButton' class="btn btn-default btn-sm" title="无答案时自动盲猜">无答案盲猜: 开</a>
-                            </div>
-                        </div>
+                <div class="cx-card" id="tikupeizhi">
+                    <div class="cx-card-header">
+                        <span>题库与 AI 答题配置</span>
+                        <a id="toggleTikuCollapse" class="btn btn-default btn-xs">收起 ▲</a>
                     </div>
-                </div>
-
-                <div class="panel panel-info" id='tikupeizhi' style="width: 100%;">
-                    <div class="panel-heading">题库与 AI 答题配置</div>
-                    <div class="panel-body">
-                        <!-- 1. 主题库配置 -->
-                        <div style="margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px dashed #ddd;">
-                            <h4 style="font-size: 15px; margin-top: 0; color: #31708f;">1. 主题库（一之哥哥题库）</h4>
-                            <div style="margin-bottom: 5px;">
-                                <span style="display: inline-block; width: 80px;">题库Token:</span>
-                                <input type="text" id="token" style="width: 240px; display: inline-block;" class="form-control input-sm" placeholder="关注公众号【一之哥哥】获取">
-                                &nbsp;
-                                <a id='updateToken' class="btn btn-primary btn-sm" style="color: white;">保存 Token</a>
-                            </div>
-                            <small class="text-muted">关注微信公众号【一之哥哥】发送“token”获取。未配置或无答案时自动降级查询备用题库/AI。</small>
+                    <div class="cx-card-body" id="tikuCardBody">
+                        <div class="cx-tabs">
+                            <span class="cx-tab" id="tabBtnAi" data-tab="ai">1. 自定义 AI</span>
+                            <span class="cx-tab" id="tabBtnMain" data-tab="main">2. 一之哥哥题库</span>
+                            <span class="cx-tab" id="tabBtnCustom" data-tab="custom">3. 备用题库 API</span>
                         </div>
 
-                        <!-- 2. 自定义备用题库 -->
-                        <div style="margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px dashed #ddd;">
-                            <h4 style="font-size: 15px; margin-top: 0; color: #31708f;">
-                                2. 自定义备用题库 API
-                                <a id="toggleCustomTiku" class="btn btn-default btn-xs" style="margin-left: 10px;">已禁用</a>
-                            </h4>
-                            <div style="margin-bottom: 5px;">
-                                <span style="display: inline-block; width: 80px;">API URL:</span>
-                                <input type="text" id="customTikuUrl" style="width: 320px; display: inline-block;" class="form-control input-sm" placeholder="https://your-api.com/query">
+                        <!-- Tab: 自定义 AI -->
+                        <div class="cx-tab-pane" id="tabPaneAi">
+                            <div class="cx-field" style="justify-content: space-between; margin-bottom: 10px;">
+                                <span class="text-muted">当题库未命中时，自动调用 AI 大模型推理</span>
+                                <a id="toggleAiTiku" class="btn btn-default btn-xs">已禁用</a>
                             </div>
-                            <div style="margin-bottom: 5px;">
-                                <span style="display: inline-block; width: 80px;">Token/Key:</span>
-                                <input type="text" id="customTikuToken" style="width: 240px; display: inline-block;" class="form-control input-sm" placeholder="可选认证 Token">
-                                &nbsp;
-                                <a id="saveCustomTiku" class="btn btn-primary btn-sm" style="color: white;">保存备用题库</a>
-                            </div>
-                            <small class="text-muted">支持常见 GET/POST 接口，兼容 {code: 1, data: "..."} 或 {answer: "..."} 返回格式。</small>
-                        </div>
-
-                        <!-- 3. DeepSeek AI 专属配置 -->
-                        <div>
-                            <h4 style="font-size: 15px; margin-top: 0; color: #31708f;">
-                                3. DeepSeek AI 智能答题（V4.1-Flash / V4-Pro）
-                                <a id="toggleAiTiku" class="btn btn-default btn-xs" style="margin-left: 10px;">已禁用</a>
-                            </h4>
-                            <div style="margin-bottom: 6px;">
-                                <span style="display: inline-block; width: 80px;">Model 模型:</span>
-                                <select id="aiTikuModel" class="form-control input-sm" style="width: 320px; display: inline-block;">
-                                    <option value="deepseek-flash">deepseek-flash (推荐：V4.1-Flash 极速高准)</option>
-                                    <option value="deepseek-v4-pro">deepseek-v4-pro (高阶推理：V4-Pro)</option>
+                            <div class="cx-field">
+                                <span class="cx-field-label">接口模式</span>
+                                <select id="aiTikuProvider" class="form-control" style="flex: 1;">
+                                    <option value="deepseek">DeepSeek 官方 (默认)</option>
+                                    <option value="custom">自定义 OpenAI 兼容接口</option>
                                 </select>
                             </div>
-                            <div style="margin-bottom: 6px;">
-                                <span style="display: inline-block; width: 80px;">思考深度:</span>
-                                <select id="aiTikuEffort" class="form-control input-sm" style="width: 320px; display: inline-block;">
-                                    <option value="low">low (推荐：轻量思考，兼顾速度与准确率)</option>
-                                    <option value="none">none (关闭思考：极速秒回，最省 Token)</option>
-                                    <option value="high">high (深度思考：适合复杂计算与疑难专业课)</option>
+                            <div class="cx-field" id="aiCustomUrlRow" style="display: none;">
+                                <span class="cx-field-label">接口地址</span>
+                                <input type="text" id="aiCustomUrl" style="flex: 1;" class="form-control" placeholder="https://api.openai.com/v1/chat/completions">
+                            </div>
+                            <div class="cx-field" id="aiModelRow">
+                                <span class="cx-field-label">Model 模型</span>
+                                <select id="aiTikuModel" class="form-control" style="flex: 1;">
+                                    <option value="deepseek-flash">deepseek-flash (推荐：极速高准)</option>
+                                    <option value="deepseek-v4-pro">deepseek-v4-pro (高阶推理)</option>
+                                    <option value="deepseek-chat">deepseek-chat (通用对话)</option>
+                                    <option value="deepseek-reasoner">deepseek-reasoner (深度推理)</option>
+                                </select>
+                                <input type="text" id="aiCustomModel" style="flex: 1; display: none;" class="form-control" placeholder="如 gpt-4o-mini / Qwen/Qwen2.5-72B-Instruct">
+                            </div>
+                            <div class="cx-field" id="aiEffortRow">
+                                <span class="cx-field-label">思考深度</span>
+                                <select id="aiTikuEffort" class="form-control" style="flex: 1;">
+                                    <option value="low">low (推荐：轻量思考)</option>
+                                    <option value="none">none (关闭思考：极速秒回)</option>
+                                    <option value="high">high (深度思考)</option>
                                     <option value="max">max (极限思考)</option>
                                 </select>
                             </div>
-                            <div style="margin-bottom: 6px;">
-                                <span style="display: inline-block; width: 80px;">API Key:</span>
-                                <input type="password" id="aiTikuApiKey" style="width: 320px; display: inline-block;" class="form-control input-sm" placeholder="sk-...">
+                            <div class="cx-field">
+                                <span class="cx-field-label">API Key</span>
+                                <input type="password" id="aiTikuApiKey" style="flex: 1;" class="form-control" placeholder="sk-...">
                             </div>
-                            <div style="margin-top: 8px;">
-                                <span style="display: inline-block; width: 80px;"></span>
-                                <a id="saveAiTiku" class="btn btn-primary btn-sm" style="color: white;">保存配置</a>
-                                <a id="testAiTiku" class="btn btn-info btn-sm" style="color: white; margin-left: 6px;">测试 API 与余额</a>
-                                <span id="aiTestStatus" style="margin-left: 10px; font-size: 13px; font-weight: bold;"></span>
+                            <div class="cx-field" style="margin-top: 10px; margin-bottom: 0;">
+                                <span class="cx-field-label"></span>
+                                <a id="saveAiTiku" class="btn btn-primary btn-sm">保存配置</a>
+                                <a id="testAiTiku" class="btn btn-info btn-sm">测试 API 连通性</a>
                             </div>
-                            <div style="margin-top: 6px;">
-                                <span style="display: inline-block; width: 80px;"></span>
-                                <small class="text-muted">底层固定使用 DeepSeek 官方接口。当题库未搜到答案时，自动调用官方大模型答题（单选、多选、判断、填空）。</small>
+                            <div id="aiTestStatus" style="margin-top: 6px; padding-left: 80px; font-size: 12px; font-weight: 600;"></div>
+                        </div>
+
+                        <!-- Tab: 一之哥哥题库 -->
+                        <div class="cx-tab-pane" id="tabPaneMain">
+                            <div class="cx-field">
+                                <span class="cx-field-label">题库 Token</span>
+                                <input type="text" id="token" style="flex: 1;" class="form-control" placeholder="关注公众号【一之哥哥】获取">
+                                <a id="updateToken" class="btn btn-primary btn-sm">保存 Token</a>
+                            </div>
+                            <div class="text-muted" style="margin-top: 6px;">
+                                关注微信公众号【一之哥哥】发送“token”获取。未配置或无答案时自动降级查询备用题库 / DeepSeek AI。
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <div class="panel panel-info">
-                    <div class="panel-heading">任务列表</div>
-                    <div class="panel-body" id='joblist'></div>
-                </div>
-
-                <div class="panel panel-info">
-                    <div class="panel-heading">运行日志</div>
-                    <div class="panel-body">
-                        <div id="result" style="overflow:auto;line-height: 30px;">
-                            <div id="log">
-                                <span style="color: red">[00:00:00]如果此提示不消失，说明页面出现了错误，请联系作者</span>
+                        <!-- Tab: 自定义备用题库 -->
+                        <div class="cx-tab-pane" id="tabPaneCustom">
+                            <div class="cx-field" style="justify-content: space-between; margin-bottom: 10px;">
+                                <span class="text-muted">支持 GET/POST，兼容 {code:1, data:"..."} 或 {answer:"..."}</span>
+                                <a id="toggleCustomTiku" class="btn btn-default btn-xs">已禁用</a>
+                            </div>
+                            <div class="cx-field">
+                                <span class="cx-field-label">API URL</span>
+                                <input type="text" id="customTikuUrl" style="flex: 1;" class="form-control" placeholder="https://your-api.com/query">
+                            </div>
+                            <div class="cx-field" style="margin-bottom: 0;">
+                                <span class="cx-field-label">Token/Key</span>
+                                <input type="text" id="customTikuToken" style="flex: 1;" class="form-control" placeholder="可选认证 Token">
+                                <a id="saveCustomTiku" class="btn btn-primary btn-sm">保存备用题库</a>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div class="panel panel-info" id='workPanel' style="display: none;height: 1000px;">
-                    <div class="panel-heading">章节测试</div>
-                    <div class="panel-body" id='workWindow' style="height: 100%;">
-                        <iframe id="frame_content" name="frame_content" src="" frameborder="0" scrolling="auto"
-                            style="width: 100%;height: 95%;"></iframe>
                     </div>
                 </div>
             </div>
+
+            <!-- 右栏：任务列表与实时日志 -->
+            <div class="cx-col">
+                <div class="cx-card">
+                    <div class="cx-card-header">
+                        <span>当前章节任务列表</span>
+                    </div>
+                    <div class="cx-card-body" id="joblist"></div>
+                </div>
+
+                <div class="cx-card">
+                    <div class="cx-card-header">
+                        <span>实时运行日志</span>
+                        <a id="clearLogBtn" class="btn btn-default btn-xs">清空日志</a>
+                    </div>
+                    <div class="cx-card-body">
+                        <div id="result">
+                            <div id="log">
+                                <span style="color: #dc2626">[00:00:00] 如果此提示不消失，说明页面出现了错误，请联系作者</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部跨栏：章节测试作答容器 -->
+            <div class="cx-card" id="workPanel" style="display: none;">
+                <div class="cx-card-header">
+                    <span>章节测试作答窗口</span>
+                </div>
+                <div class="cx-card-body" id="workWindow" style="height: calc(100% - 38px); padding: 0;">
+                    <iframe id="frame_content" name="frame_content" src="" frameborder="0" scrolling="auto"
+                        style="width: 100%; height: 100%;"></iframe>
+                </div>
+            </div>
         </div>
-    </body>
+    </div>
+</body>
 </html>
 `;
 
 function bindPanelEvents() {
-    let allowBackground = false;
     const htmlHook = setInterval(function () {
         if (_d.getElementById('unrivalRate') && _d.getElementById('updateRateButton') && _d
             .getElementById('reviewModeButton') && _d.getElementById('autoDoWorkButton') && _d
             .getElementById('autoSubmitButton') && _d.getElementById('autoSaveButton')) {
-            if (!backGround) {
-                _d.getElementById('fuckMeModeButton').style.display = "none";
-            }
-            allowBackground = Math.round(new Date() / 1000) - parseInt(GM_getValue('unrivalBackgroundVideoEnable', '6')) < 15;
-            if (allowBackground) {
-                _d.getElementById('fuckMeModeButton').setAttribute('href', 'unrivalxxtbackground/');
-            }
             clearInterval(htmlHook);
-            if (cVersion < 86) {
-                logs.addLog('您的浏览器内核过老，请更新浏览器或者使用火狐/Edge浏览器', 'red');
-                stop = true;
-                return;
-            }
             if (isMobile) {
                 logs.addLog('手机浏览器不保证能正常运行此脚本', 'orange');
             }
-            _d.addEventListener('visibilitychange', function () {
-                let isH = _d.hidden;
-                if (!isH) {
-                    logs.addLog('挂机功能不稳定，不建议长时间最小化窗口', 'orange');
+
+            // 0. 题库面板折叠、Tab切换与清空日志
+            const tikuCardBody = _d.getElementById('tikuCardBody');
+            const toggleCollapseBtn = _d.getElementById('toggleTikuCollapse');
+            let isTikuCollapsed = GM_getValue('unrivaltikucollapse', '0') === '1';
+            const applyTikuCollapse = (collapsed) => {
+                if (!tikuCardBody || !toggleCollapseBtn) return;
+                tikuCardBody.style.display = collapsed ? 'none' : 'block';
+                toggleCollapseBtn.innerText = collapsed ? '展开 ▼' : '收起 ▲';
+            };
+            applyTikuCollapse(isTikuCollapsed);
+            if (toggleCollapseBtn) {
+                toggleCollapseBtn.onclick = function () {
+                    isTikuCollapsed = !isTikuCollapsed;
+                    GM_setValue('unrivaltikucollapse', isTikuCollapsed ? '1' : '0');
+                    applyTikuCollapse(isTikuCollapsed);
+                };
+            }
+
+            const tabMap = {
+                ai: { btn: _d.getElementById('tabBtnAi'), pane: _d.getElementById('tabPaneAi') },
+                main: { btn: _d.getElementById('tabBtnMain'), pane: _d.getElementById('tabPaneMain') },
+                custom: { btn: _d.getElementById('tabBtnCustom'), pane: _d.getElementById('tabPaneCustom') }
+            };
+            const switchTikuTab = (tabKey) => {
+                const target = tabMap[tabKey] ? tabKey : 'ai';
+                Object.keys(tabMap).forEach(k => {
+                    if (tabMap[k].btn) tabMap[k].btn.className = k === target ? 'cx-tab active' : 'cx-tab';
+                    if (tabMap[k].pane) tabMap[k].pane.className = k === target ? 'cx-tab-pane active' : 'cx-tab-pane';
+                });
+                GM_setValue('unrivaltikutab', target);
+            };
+            switchTikuTab(GM_getValue('unrivaltikutab', 'ai'));
+            Object.keys(tabMap).forEach(k => {
+                if (tabMap[k].btn) {
+                    tabMap[k].btn.onclick = function () {
+                        switchTikuTab(k);
+                    };
                 }
             });
+
+            const clearLogBtn = _d.getElementById('clearLogBtn');
+            if (clearLogBtn) {
+                clearLogBtn.onclick = function () {
+                    logs.logArry = [];
+                    logs.addLog('日志已清空', 'green');
+                };
+            }
 
             // 1. 一之哥哥题库 Token
             _d.getElementById('token').value = GM_getValue('tikutoken', '');
@@ -278,6 +560,11 @@ function bindPanelEvents() {
                 }
             };
             updateBgBtnUI(isBgActive);
+            if (isBgActive) {
+                if (typeof keepAliveAudio !== 'undefined') keepAliveAudio.start();
+            } else {
+                if (typeof keepAliveAudio !== 'undefined') keepAliveAudio.stop();
+            }
 
             bgBtn.onclick = function () {
                 let currentActive = bgBtn.getAttribute('class').includes('btn-success');
@@ -286,11 +573,13 @@ function bindPanelEvents() {
                     _w.top.backNow = 1;
                     GM_setValue('unrivalbacknow', '1');
                     updateBgBtnUI(true);
+                    if (typeof keepAliveAudio !== 'undefined') keepAliveAudio.start();
                     logs.addLog('挂机激活成功，您现在可以最小化页面了', 'green');
                 } else {
                     _w.top.backNow = 0;
                     GM_setValue('unrivalbacknow', '0');
                     updateBgBtnUI(false);
+                    if (typeof keepAliveAudio !== 'undefined') keepAliveAudio.stop();
                     logs.addLog('挂机已取消激活', 'orange');
                 }
             };
@@ -438,120 +727,164 @@ function bindPanelEvents() {
                 logs.addLog('自定义备用题库配置已保存', 'green');
             };
 
-            // 13. DeepSeek AI 专属配置与双重测活
-            let savedModel = GM_getValue('aiTikuModel', 'deepseek-flash');
-            if (!['deepseek-flash', 'deepseek-v4-pro'].includes(savedModel)) {
-                savedModel = 'deepseek-flash';
+            // 13. AI 智能答题配置（支持 DeepSeek 官方与自定义 OpenAI 兼容接口）
+            const aiProviderSelect = _d.getElementById('aiTikuProvider');
+            const aiCustomUrlRow = _d.getElementById('aiCustomUrlRow');
+            const aiCustomUrlInput = _d.getElementById('aiCustomUrl');
+            const aiTikuModelSelect = _d.getElementById('aiTikuModel');
+            const aiCustomModelInput = _d.getElementById('aiCustomModel');
+            const aiEffortRow = _d.getElementById('aiEffortRow');
+            const aiTikuEffortSelect = _d.getElementById('aiTikuEffort');
+            const aiApiKeyInput = _d.getElementById('aiTikuApiKey');
+            const aiToggleBtn = _d.getElementById('toggleAiTiku');
+            const saveAiBtn = _d.getElementById('saveAiTiku');
+            const testAiBtn = _d.getElementById('testAiTiku');
+            const testStatusSpan = _d.getElementById('aiTestStatus');
+
+            let currentAiProvider = GM_getValue('aiTikuProvider', 'deepseek') || 'deepseek';
+            if (!['deepseek', 'custom'].includes(currentAiProvider)) {
+                currentAiProvider = 'deepseek';
+            }
+            if (aiProviderSelect) aiProviderSelect.value = currentAiProvider;
+
+            let savedDeepseekModel = GM_getValue('aiTikuModel', 'deepseek-flash');
+            if (!['deepseek-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'].includes(savedDeepseekModel)) {
+                savedDeepseekModel = 'deepseek-flash';
                 GM_setValue('aiTikuModel', 'deepseek-flash');
             }
-            _d.getElementById('aiTikuModel').value = savedModel;
+            if (aiTikuModelSelect) aiTikuModelSelect.value = savedDeepseekModel;
 
-            let savedEffort = GM_getValue('aiTikuEffort', 'low');
-            if (!['low', 'none', 'high', 'max'].includes(savedEffort)) {
-                savedEffort = 'low';
+            let savedDeepseekEffort = GM_getValue('aiTikuEffort', 'low');
+            if (!['low', 'none', 'high', 'max'].includes(savedDeepseekEffort)) {
+                savedDeepseekEffort = 'low';
                 GM_setValue('aiTikuEffort', 'low');
             }
-            _d.getElementById('aiTikuEffort').value = savedEffort;
-            _d.getElementById('aiTikuApiKey').value = GM_getValue('aiTikuApiKey', '');
+            if (aiTikuEffortSelect) aiTikuEffortSelect.value = savedDeepseekEffort;
 
-            let aiToggleBtn = _d.getElementById('toggleAiTiku');
-            let updateAiTikuUI = () => {
-                let isAiOn = GM_getValue('aiTikuEnable', '0') === '1';
-                if (isAiOn) {
-                    aiToggleBtn.setAttribute('class', 'btn btn-success btn-xs');
-                    aiToggleBtn.innerText = '已启用';
+            if (aiCustomUrlInput) aiCustomUrlInput.value = GM_getValue('aiCustomUrl', '');
+            if (aiCustomModelInput) aiCustomModelInput.value = GM_getValue('aiCustomModel', '');
+
+            const applyAiProviderUI = (provider) => {
+                if (provider === 'custom') {
+                    if (aiCustomUrlRow) aiCustomUrlRow.style.display = 'flex';
+                    if (aiTikuModelSelect) aiTikuModelSelect.style.display = 'none';
+                    if (aiCustomModelInput) aiCustomModelInput.style.display = 'block';
+                    if (aiEffortRow) aiEffortRow.style.display = 'none';
+                    if (aiApiKeyInput) aiApiKeyInput.value = GM_getValue('aiCustomApiKey', '');
+                    if (testAiBtn) testAiBtn.innerText = '测试 API 连通性';
                 } else {
-                    aiToggleBtn.setAttribute('class', 'btn btn-default btn-xs');
-                    aiToggleBtn.innerText = '已禁用';
+                    if (aiCustomUrlRow) aiCustomUrlRow.style.display = 'none';
+                    if (aiTikuModelSelect) aiTikuModelSelect.style.display = 'block';
+                    if (aiCustomModelInput) aiCustomModelInput.style.display = 'none';
+                    if (aiEffortRow) aiEffortRow.style.display = 'flex';
+                    if (aiApiKeyInput) aiApiKeyInput.value = GM_getValue('aiTikuApiKey', '');
+                    if (testAiBtn) testAiBtn.innerText = '测试 API 与余额';
+                }
+            };
+            applyAiProviderUI(currentAiProvider);
+
+            if (aiProviderSelect) {
+                aiProviderSelect.onchange = function () {
+                    const p = aiProviderSelect.value;
+                    applyAiProviderUI(p);
+                    if (testStatusSpan) testStatusSpan.innerHTML = '';
+                };
+            }
+
+            const updateAiTikuUI = () => {
+                const isAiOn = GM_getValue('aiTikuEnable', '0') === '1';
+                if (aiToggleBtn) {
+                    if (isAiOn) {
+                        aiToggleBtn.setAttribute('class', 'btn btn-success btn-xs');
+                        aiToggleBtn.innerText = '已启用';
+                    } else {
+                        aiToggleBtn.setAttribute('class', 'btn btn-default btn-xs');
+                        aiToggleBtn.innerText = '已禁用';
+                    }
                 }
             };
             updateAiTikuUI();
-            aiToggleBtn.onclick = function () {
-                let nextState = GM_getValue('aiTikuEnable', '0') === '1' ? '0' : '1';
-                GM_setValue('aiTikuEnable', nextState);
-                updateAiTikuUI();
-                logs.addLog(nextState === '1' ? '已启用 DeepSeek AI 智能答题' : '已禁用 DeepSeek AI 智能答题', 'green');
-            };
-
-            _d.getElementById('saveAiTiku').onclick = function () {
-                let k = _d.getElementById('aiTikuApiKey').value.trim();
-                let m = _d.getElementById('aiTikuModel').value;
-                let ef = _d.getElementById('aiTikuEffort').value;
-                GM_setValue('aiTikuApiKey', k);
-                GM_setValue('aiTikuModel', m);
-                GM_setValue('aiTikuEffort', ef);
-                logs.addLog('DeepSeek 配置已保存 (模型: ' + m + ' | 思考深度: ' + ef + ')', 'green');
-            };
-
-            let testAiBtn = _d.getElementById('testAiTiku');
-            let testStatusSpan = _d.getElementById('aiTestStatus');
-            testAiBtn.onclick = function () {
-                let apiKey = _d.getElementById('aiTikuApiKey').value.trim();
-                let model = _d.getElementById('aiTikuModel').value;
-                let effort = _d.getElementById('aiTikuEffort').value;
-
-                if (!apiKey) {
-                    testStatusSpan.innerHTML = '<span style="color: red;">❌ 请先填写 API Key</span>';
-                    logs.addLog('请先填写 DeepSeek API Key', 'red');
-                    return;
-                }
-
-                GM_setValue('aiTikuApiKey', apiKey);
-                GM_setValue('aiTikuModel', model);
-                GM_setValue('aiTikuEffort', effort);
-
-                let resetBtn = () => {
-                    testAiBtn.innerText = '测试 API 与余额';
-                    testAiBtn.style.pointerEvents = 'auto';
-                    testAiBtn.style.opacity = '1';
+            if (aiToggleBtn) {
+                aiToggleBtn.onclick = function () {
+                    const nextState = GM_getValue('aiTikuEnable', '0') === '1' ? '0' : '1';
+                    GM_setValue('aiTikuEnable', nextState);
+                    updateAiTikuUI();
+                    const pName = (aiProviderSelect && aiProviderSelect.value === 'custom') ? '自定义 AI' : 'DeepSeek AI';
+                    logs.addLog(nextState === '1' ? '已启用 ' + pName + ' 智能答题' : '已禁用 ' + pName + ' 智能答题', 'green');
                 };
+            }
 
-                testAiBtn.innerText = '⏳ 测试中...';
-                testAiBtn.style.pointerEvents = 'none';
-                testAiBtn.style.opacity = '0.6';
-                testStatusSpan.innerHTML = '<span style="color: #31708f;">⏳ 正在检测账户余额与模型连通性...</span>';
+            if (saveAiBtn) {
+                saveAiBtn.onclick = function () {
+                    const provider = aiProviderSelect ? aiProviderSelect.value : 'deepseek';
+                    GM_setValue('aiTikuProvider', provider);
+                    const currentKey = aiApiKeyInput ? aiApiKeyInput.value.trim() : '';
 
-                // 第1步：请求余额
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: 'https://api.deepseek.com/user/balance',
-                    headers: { 'Authorization': 'Bearer ' + apiKey },
-                    timeout: 8000,
-                    onload: function (balRes) {
-                        if (balRes.status === 401) {
-                            resetBtn();
-                            testStatusSpan.innerHTML = '<span style="color: red;">❌ API Key 无效或已过期 (HTTP 401)</span>';
-                            logs.addLog('DeepSeek 余额查询失败：API Key 无效或已过期 (HTTP 401)', 'red');
+                    if (provider === 'custom') {
+                        const url = aiCustomUrlInput ? aiCustomUrlInput.value.trim() : '';
+                        const model = aiCustomModelInput ? aiCustomModelInput.value.trim() : '';
+                        GM_setValue('aiCustomUrl', url);
+                        GM_setValue('aiCustomModel', model);
+                        GM_setValue('aiCustomApiKey', currentKey);
+                        logs.addLog('自定义 AI 配置已保存 (模型: ' + (model || '未填写') + ')', 'green');
+                    } else {
+                        const model = aiTikuModelSelect ? aiTikuModelSelect.value : 'deepseek-flash';
+                        const effort = aiTikuEffortSelect ? aiTikuEffortSelect.value : 'low';
+                        GM_setValue('aiTikuModel', model);
+                        GM_setValue('aiTikuEffort', effort);
+                        GM_setValue('aiTikuApiKey', currentKey);
+                        logs.addLog('DeepSeek 配置已保存 (模型: ' + model + ' | 思考深度: ' + effort + ')', 'green');
+                    }
+                };
+            }
+
+            if (testAiBtn) {
+                testAiBtn.onclick = function () {
+                    const provider = aiProviderSelect ? aiProviderSelect.value : 'deepseek';
+                    const apiKey = aiApiKeyInput ? aiApiKeyInput.value.trim() : '';
+
+                    if (provider === 'custom') {
+                        const rawUrl = aiCustomUrlInput ? aiCustomUrlInput.value.trim() : '';
+                        const model = aiCustomModelInput ? aiCustomModelInput.value.trim() : '';
+
+                        if (!rawUrl) {
+                            if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 请先填写接口地址 (URL)</span>';
+                            logs.addLog('请先填写自定义 AI 接口地址', 'red');
+                            return;
+                        }
+                        if (!model) {
+                            if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 请先填写 Model 模型名称</span>';
+                            logs.addLog('请先填写自定义 AI 模型名称', 'red');
+                            return;
+                        }
+                        if (!apiKey) {
+                            if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 请先填写 API Key</span>';
+                            logs.addLog('请先填写自定义 AI API Key', 'red');
                             return;
                         }
 
-                        let balanceStr = '';
-                        let isAvailable = true;
-                        try {
-                            let balJson = JSON.parse(balRes.responseText);
-                            if (balJson.is_available !== undefined) isAvailable = balJson.is_available;
-                            if (balJson.balance_infos && balJson.balance_infos.length > 0) {
-                                let bInfo = balJson.balance_infos[0];
-                                let total = bInfo.total_balance !== undefined ? bInfo.total_balance : '';
-                                let curr = bInfo.currency || 'CNY';
-                                balanceStr = total + ' ' + curr;
-                            }
-                        } catch (e) { }
+                        GM_setValue('aiTikuProvider', 'custom');
+                        GM_setValue('aiCustomUrl', rawUrl);
+                        GM_setValue('aiCustomModel', model);
+                        GM_setValue('aiCustomApiKey', apiKey);
 
-                        if (!balanceStr) balanceStr = isAvailable ? '充足' : '0.00 CNY';
+                        const resetBtn = () => {
+                            testAiBtn.innerText = '测试 API 连通性';
+                            testAiBtn.style.pointerEvents = 'auto';
+                            testAiBtn.style.opacity = '1';
+                        };
 
-                        if (isAvailable === false) {
-                            resetBtn();
-                            testStatusSpan.innerHTML = '<span style="color: red;">❌ 账户余额不足 (余额: ' + balanceStr + ')</span>';
-                            logs.addLog('DeepSeek 账户余额不足 (余额: ' + balanceStr + ')', 'red');
-                            return;
-                        }
+                        testAiBtn.innerText = '⏳ 测试中...';
+                        testAiBtn.style.pointerEvents = 'none';
+                        testAiBtn.style.opacity = '0.6';
+                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: #31708f;">⏳ 正在测试自定义 AI 接口连通性...</span>';
 
-                        // 第2步：验证对话接口
-                        let startTime = Date.now();
+                        const targetUrl = normalizeAiEndpoint(rawUrl);
+                        const startTime = Date.now();
+
                         GM_xmlhttpRequest({
                             method: 'POST',
-                            url: 'https://api.deepseek.com/chat/completions',
+                            url: targetUrl,
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': 'Bearer ' + apiKey
@@ -561,22 +894,20 @@ function bindPanelEvents() {
                                 messages: [
                                     { role: 'user', content: '单选题：1+1等于几？A.1 B.2。请仅输出正确选项字母，不要任何解释。' }
                                 ],
-                                stream: false,
-                                reasoning_effort: 'none',
-                                thinking: { type: 'disabled' }
+                                stream: false
                             }),
                             timeout: 15000,
                             onload: function (chatRes) {
                                 resetBtn();
-                                let ms = Date.now() - startTime;
+                                const ms = Date.now() - startTime;
                                 if (chatRes.status === 200) {
                                     try {
-                                        let chatJson = JSON.parse(chatRes.responseText);
-                                        let reply = chatJson.choices && chatJson.choices[0] && chatJson.choices[0].message && chatJson.choices[0].message.content;
+                                        const chatJson = JSON.parse(chatRes.responseText);
+                                        const reply = chatJson.choices && chatJson.choices[0] && chatJson.choices[0].message && chatJson.choices[0].message.content;
                                         if (reply) {
-                                            reply = reply.trim();
-                                            testStatusSpan.innerHTML = '<span style="color: green;">✅ 可用 | 余额: ' + balanceStr + ' | 响应: "' + reply + '" (' + ms + 'ms)</span>';
-                                            logs.addLog('DeepSeek 测试成功！可用余额: ' + balanceStr + ' | 模型: ' + model + ' | 响应: "' + reply + '" (' + ms + 'ms)', 'green');
+                                            const cleanReply = reply.trim().replace(/^```[a-z]*\s*/i, '').replace(/```$/i, '').trim();
+                                            if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: green;">✅ 可用 | 模型: ' + model + ' | 响应: "' + cleanReply + '" (' + ms + ' ms)</span>';
+                                            logs.addLog('自定义 AI 测试成功！模型: ' + model + ' | 响应: "' + cleanReply + '" (' + ms + ' ms)', 'green');
                                             return;
                                         }
                                     } catch (e) { }
@@ -584,39 +915,160 @@ function bindPanelEvents() {
 
                                 let errMsg = '';
                                 try {
-                                    let errJson = JSON.parse(chatRes.responseText);
+                                    const errJson = JSON.parse(chatRes.responseText);
                                     if (errJson.error && errJson.error.message) errMsg = errJson.error.message;
                                 } catch (e) { }
-                                let errDisplay = '❌ 连通测试失败 [HTTP ' + chatRes.status + ']: ' + (errMsg || chatRes.statusText || '请求异常');
-                                testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
-                                logs.addLog('DeepSeek 连通测试失败: ' + errDisplay, 'red');
+                                const errDisplay = '❌ 连通测试失败 [HTTP ' + chatRes.status + ']: ' + (errMsg || chatRes.statusText || '请求异常');
+                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                logs.addLog('自定义 AI 连通测试失败: ' + errDisplay, 'red');
                             },
                             onerror: function (err) {
                                 resetBtn();
-                                let errDisplay = '❌ 对话接口网络错误: ' + (err.error || '连接异常');
-                                testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
-                                logs.addLog('DeepSeek 连通错误: ' + errDisplay, 'red');
+                                const errDisplay = '❌ 对话接口网络错误: ' + ((err && err.error) || '连接异常');
+                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                logs.addLog('自定义 AI 连通错误: ' + errDisplay, 'red');
                             },
                             ontimeout: function () {
                                 resetBtn();
-                                testStatusSpan.innerHTML = '<span style="color: red;">❌ 对话接口请求超时 (15s)</span>';
-                                logs.addLog('DeepSeek 连通请求超时 (15s)', 'red');
+                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 对话接口请求超时 (15s)</span>';
+                                logs.addLog('自定义 AI 连通请求超时 (15s)', 'red');
                             }
                         });
-                    },
-                    onerror: function (err) {
-                        resetBtn();
-                        let errDisplay = '❌ 余额接口网络错误: ' + (err.error || '连接异常');
-                        testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
-                        logs.addLog('DeepSeek 余额请求错误: ' + errDisplay, 'red');
-                    },
-                    ontimeout: function () {
-                        resetBtn();
-                        testStatusSpan.innerHTML = '<span style="color: red;">❌ 余额接口请求超时 (8s)</span>';
-                        logs.addLog('DeepSeek 余额请求超时 (8s)', 'red');
+                    } else {
+                        // DeepSeek 模式
+                        const model = aiTikuModelSelect ? aiTikuModelSelect.value : 'deepseek-flash';
+                        const effort = aiTikuEffortSelect ? aiTikuEffortSelect.value : 'low';
+
+                        if (!apiKey) {
+                            if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 请先填写 API Key</span>';
+                            logs.addLog('请先填写 DeepSeek API Key', 'red');
+                            return;
+                        }
+
+                        GM_setValue('aiTikuProvider', 'deepseek');
+                        GM_setValue('aiTikuApiKey', apiKey);
+                        GM_setValue('aiTikuModel', model);
+                        GM_setValue('aiTikuEffort', effort);
+
+                        const resetBtn = () => {
+                            testAiBtn.innerText = '测试 API 与余额';
+                            testAiBtn.style.pointerEvents = 'auto';
+                            testAiBtn.style.opacity = '1';
+                        };
+
+                        testAiBtn.innerText = '⏳ 测试中...';
+                        testAiBtn.style.pointerEvents = 'none';
+                        testAiBtn.style.opacity = '0.6';
+                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: #31708f;">⏳ 正在检测账户余额与模型连通性...</span>';
+
+                        // 第1步：请求余额
+                        GM_xmlhttpRequest({
+                            method: 'GET',
+                            url: 'https://api.deepseek.com/user/balance',
+                            headers: { 'Authorization': 'Bearer ' + apiKey },
+                            timeout: 8000,
+                            onload: function (balRes) {
+                                if (balRes.status === 401) {
+                                    resetBtn();
+                                    if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ API Key 无效或已过期 (HTTP 401)</span>';
+                                    logs.addLog('DeepSeek 余额查询失败：API Key 无效或已过期 (HTTP 401)', 'red');
+                                    return;
+                                }
+
+                                let balanceStr = '';
+                                let isAvailable = true;
+                                try {
+                                    const balJson = JSON.parse(balRes.responseText);
+                                    if (balJson.is_available !== undefined) isAvailable = balJson.is_available;
+                                    if (balJson.balance_infos && balJson.balance_infos.length > 0) {
+                                        const bInfo = balJson.balance_infos[0];
+                                        const total = bInfo.total_balance !== undefined ? bInfo.total_balance : '';
+                                        const curr = bInfo.currency || 'CNY';
+                                        balanceStr = total + ' ' + curr;
+                                    }
+                                } catch (e) { }
+
+                                if (!balanceStr) balanceStr = isAvailable ? '充足' : '0.00 CNY';
+
+                                if (isAvailable === false) {
+                                    resetBtn();
+                                    if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 账户余额不足 (余额: ' + balanceStr + ')</span>';
+                                    logs.addLog('DeepSeek 账户余额不足 (余额: ' + balanceStr + ')', 'red');
+                                    return;
+                                }
+
+                                // 第2步：验证对话接口
+                                const startTime = Date.now();
+                                GM_xmlhttpRequest({
+                                    method: 'POST',
+                                    url: 'https://api.deepseek.com/chat/completions',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': 'Bearer ' + apiKey
+                                    },
+                                    data: JSON.stringify({
+                                        model: model,
+                                        messages: [
+                                            { role: 'user', content: '单选题：1+1等于几？A.1 B.2。请仅输出正确选项字母，不要任何解释。' }
+                                        ],
+                                        stream: false,
+                                        reasoning_effort: 'none',
+                                        thinking: { type: 'disabled' }
+                                    }),
+                                    timeout: 15000,
+                                    onload: function (chatRes) {
+                                        resetBtn();
+                                        const ms = Date.now() - startTime;
+                                        if (chatRes.status === 200) {
+                                            try {
+                                                const chatJson = JSON.parse(chatRes.responseText);
+                                                const reply = chatJson.choices && chatJson.choices[0] && chatJson.choices[0].message && chatJson.choices[0].message.content;
+                                                if (reply) {
+                                                    const cleanReply = reply.trim();
+                                                    if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: green;">✅ 可用 | 余额: ' + balanceStr + ' | 响应: "' + cleanReply + '" (' + ms + 'ms)</span>';
+                                                    logs.addLog('DeepSeek 测试成功！可用余额: ' + balanceStr + ' | 模型: ' + model + ' | 响应: "' + cleanReply + '" (' + ms + 'ms)', 'green');
+                                                    return;
+                                                }
+                                            } catch (e) { }
+                                        }
+
+                                        let errMsg = '';
+                                        try {
+                                            const errJson = JSON.parse(chatRes.responseText);
+                                            if (errJson.error && errJson.error.message) errMsg = errJson.error.message;
+                                        } catch (e) { }
+                                        const errDisplay = '❌ 连通测试失败 [HTTP ' + chatRes.status + ']: ' + (errMsg || chatRes.statusText || '请求异常');
+                                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                        logs.addLog('DeepSeek 连通测试失败: ' + errDisplay, 'red');
+                                    },
+                                    onerror: function (err) {
+                                        resetBtn();
+                                        const errDisplay = '❌ 对话接口网络错误: ' + ((err && err.error) || '连接异常');
+                                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                        logs.addLog('DeepSeek 连通错误: ' + errDisplay, 'red');
+                                    },
+                                    ontimeout: function () {
+                                        resetBtn();
+                                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 对话接口请求超时 (15s)</span>';
+                                        logs.addLog('DeepSeek 连通请求超时 (15s)', 'red');
+                                    }
+                                });
+                            },
+                            onerror: function (err) {
+                                resetBtn();
+                                const errDisplay = '❌ 余额接口网络错误: ' + ((err && err.error) || '连接异常');
+                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                logs.addLog('DeepSeek 余额请求错误: ' + errDisplay, 'red');
+                            },
+                            ontimeout: function () {
+                                resetBtn();
+                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 余额接口请求超时 (8s)</span>';
+                                logs.addLog('DeepSeek 余额请求超时 (8s)', 'red');
+                            }
+                        });
                     }
-                });
-            };
+                };
+            }
         }
     }, 100);
 }

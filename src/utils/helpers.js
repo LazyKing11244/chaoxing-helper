@@ -70,3 +70,129 @@ function cleanText(s) {
         .replace(/[，,。\.：:；;？\?（\(）\)“”"！!\-_\s]/g, '')
         .toLowerCase();
 }
+
+// ==========================================
+// 后台保活防休眠与 Worker 高精度定时器
+// ==========================================
+
+function createWorkerTimer(callback, intervalMs = 1000) {
+    try {
+        const workerCode = `let t = setInterval(() => postMessage(1), ${Number(intervalMs) || 1000}); onmessage = (e) => { if (e.data === 'stop') clearInterval(t); };`;
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        const worker = new Worker(url);
+
+        worker.onmessage = function () {
+            try {
+                callback();
+            } catch (err) {
+                console.error('[WorkerTimer Callback Error]', err);
+            }
+        };
+
+        let stopped = false;
+        return {
+            stop: function () {
+                if (stopped) return;
+                stopped = true;
+                try {
+                    worker.postMessage('stop');
+                } catch (e) { }
+                try {
+                    worker.terminate();
+                } catch (e) { }
+                try {
+                    URL.revokeObjectURL(url);
+                } catch (e) { }
+            }
+        };
+    } catch (e) {
+        // 浏览器环境或 CSP 限制导致 new Worker 抛错时自动降级
+        const timerId = setInterval(callback, intervalMs);
+        let stopped = false;
+        return {
+            stop: function () {
+                if (stopped) return;
+                stopped = true;
+                clearInterval(timerId);
+            }
+        };
+    }
+}
+
+const keepAliveAudio = {
+    ctx: null,
+    osc: null,
+    gain: null,
+    wakeLockSentinel: null,
+
+    start: function () {
+        try {
+            const AudioCtx = _w.AudioContext || _w.webkitAudioContext;
+            if (AudioCtx) {
+                if (!this.ctx || this.ctx.state === 'closed') {
+                    this.ctx = new AudioCtx();
+                }
+                if (!this.osc) {
+                    this.osc = this.ctx.createOscillator();
+                    this.gain = this.ctx.createGain();
+                    this.osc.type = 'sine';
+                    this.osc.frequency.value = 10;
+                    this.gain.gain.value = 0.0001;
+                    this.osc.connect(this.gain);
+                    this.gain.connect(this.ctx.destination);
+                    this.osc.start();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume().catch(() => { });
+                }
+            }
+        } catch (e) {
+            console.error('[keepAliveAudio] Audio start failed:', e);
+        }
+
+        try {
+            if (_w.navigator && _w.navigator.wakeLock && !this.wakeLockSentinel) {
+                _w.navigator.wakeLock.request('screen').then(sentinel => {
+                    this.wakeLockSentinel = sentinel;
+                    sentinel.addEventListener('release', () => {
+                        if (this.wakeLockSentinel === sentinel) {
+                            this.wakeLockSentinel = null;
+                        }
+                    });
+                }).catch(() => { });
+            }
+        } catch (e) {
+            console.error('[keepAliveAudio] WakeLock request failed:', e);
+        }
+    },
+
+    stop: function () {
+        if (this.osc) {
+            try {
+                this.osc.stop();
+                this.osc.disconnect();
+            } catch (e) { }
+            this.osc = null;
+        }
+        if (this.gain) {
+            try {
+                this.gain.disconnect();
+            } catch (e) { }
+            this.gain = null;
+        }
+        if (this.ctx) {
+            try {
+                if (this.ctx.state !== 'closed') {
+                    this.ctx.suspend().catch(() => { });
+                }
+            } catch (e) { }
+        }
+        if (this.wakeLockSentinel) {
+            try {
+                this.wakeLockSentinel.release().catch(() => { });
+            } catch (e) { }
+            this.wakeLockSentinel = null;
+        }
+    }
+};

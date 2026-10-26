@@ -1,6 +1,23 @@
 // ==========================================
-// 三级题库降级查题引擎（一之哥哥 -> 备用题库 -> DeepSeek AI）
+// 三级题库降级查题引擎（一之哥哥 -> 备用题库 -> 自定义 AI）
 // ==========================================
+
+function normalizeAiEndpoint(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') {
+        return 'https://api.deepseek.com/chat/completions';
+    }
+    let url = rawUrl.trim().replace(/\/+$/, '');
+    if (!url) {
+        return 'https://api.deepseek.com/chat/completions';
+    }
+    if (url.endsWith('/chat/completions')) {
+        return url;
+    }
+    if (url.endsWith('/v1')) {
+        return url + '/chat/completions';
+    }
+    return url + '/v1/chat/completions';
+}
 
 function searchQuestionAnswer(quItem, callback, widParam) {
     const curToken = GM_getValue('tikutoken', '') || '';
@@ -38,24 +55,10 @@ function searchQuestionAnswer(quItem, callback, widParam) {
         });
     }
 
-    // 2. 尝试 DeepSeek AI 官方大模型
+    // 2. 尝试 AI 智能大模型（支持 DeepSeek 官方与自定义 OpenAI 兼容接口）
     function tryAiBank() {
         const aiEnable = GM_getValue('aiTikuEnable', '0') === '1';
-        const aiApiKey = (GM_getValue('aiTikuApiKey', '') || '').trim();
-        let aiModel = (GM_getValue('aiTikuModel', 'deepseek-flash') || '').trim();
-        if (!['deepseek-flash', 'deepseek-v4-pro'].includes(aiModel)) {
-            aiModel = 'deepseek-flash';
-            GM_setValue('aiTikuModel', 'deepseek-flash');
-        }
-        let aiEffort = GM_getValue('aiTikuEffort', 'low') || 'low';
-        if (!['low', 'none', 'high', 'max'].includes(aiEffort)) {
-            aiEffort = 'low';
-        }
-
-        if (!aiEnable || !aiApiKey) {
-            callback({ code: -1, data: '未找到答案' });
-            return;
-        }
+        const aiProvider = GM_getValue('aiTikuProvider', 'deepseek') || 'deepseek';
 
         let optionsStr = '';
         if (quItem['options'] && quItem['options'].length > 0) {
@@ -77,45 +80,109 @@ function searchQuestionAnswer(quItem, callback, widParam) {
             '- 判断题：仅输出“正确”或“错误”；\n' +
             '- 填空题：仅输出填空内容，多空时请用“###”分隔（如：答案一###答案二）。';
 
-        const reqBody = {
-            model: aiModel,
-            messages: [
-                { role: 'system', content: '你是高校专业章节测试答题机器人，仅输出最简答案文本，不要任何废话。' },
-                { role: 'user', content: promptText }
-            ],
-            stream: false,
-            reasoning_effort: aiEffort,
-            thinking: {
-                type: aiEffort === 'none' ? 'disabled' : 'enabled'
-            }
-        };
+        const messages = [
+            { role: 'system', content: '你是高校专业章节测试答题机器人，仅输出最简答案文本，不要任何废话。' },
+            { role: 'user', content: promptText }
+        ];
 
-        GM_xmlhttpRequest({
-            method: 'POST',
-            url: 'https://api.deepseek.com/chat/completions',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + aiApiKey
-            },
-            data: JSON.stringify(reqBody),
-            timeout: 25000,
-            onload: function (res) {
-                try {
-                    const json = JSON.parse(res.responseText);
-                    const msg = json.choices && json.choices[0] && json.choices[0].message;
-                    let content = (msg && msg.content) || '';
-                    if (content) {
-                        content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
-                        content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
-                        callback({ code: 1, data: content, from: 'DeepSeek (' + aiModel + ')' });
-                        return;
-                    }
-                } catch (e) { }
+        if (aiProvider === 'custom') {
+            const rawCustomUrl = GM_getValue('aiCustomUrl', '');
+            const customUrl = normalizeAiEndpoint(rawCustomUrl);
+            const customModel = (GM_getValue('aiCustomModel', '') || '').trim();
+            const customKey = (GM_getValue('aiCustomApiKey', '') || '').trim();
+
+            if (!aiEnable || !customKey || !customModel || !rawCustomUrl.trim()) {
                 callback({ code: -1, data: '未找到答案' });
-            },
-            onerror: function () { callback({ code: -1, data: '未找到答案' }); },
-            ontimeout: function () { callback({ code: -1, data: '未找到答案' }); }
-        });
+                return;
+            }
+
+            const reqBody = {
+                model: customModel,
+                messages: messages,
+                stream: false
+            };
+
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: customUrl,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + customKey
+                },
+                data: JSON.stringify(reqBody),
+                timeout: 25000,
+                onload: function (res) {
+                    try {
+                        const json = JSON.parse(res.responseText);
+                        const msg = json.choices && json.choices[0] && json.choices[0].message;
+                        let content = (msg && msg.content) || '';
+                        if (content) {
+                            content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
+                            content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
+                            callback({ code: 1, data: content, from: '自定义AI (' + customModel + ')' });
+                            return;
+                        }
+                    } catch (e) { }
+                    callback({ code: -1, data: '未找到答案' });
+                },
+                onerror: function () { callback({ code: -1, data: '未找到答案' }); },
+                ontimeout: function () { callback({ code: -1, data: '未找到答案' }); }
+            });
+        } else {
+            // DeepSeek 官方
+            const aiApiKey = (GM_getValue('aiTikuApiKey', '') || '').trim();
+            let aiModel = (GM_getValue('aiTikuModel', 'deepseek-flash') || '').trim();
+            if (!['deepseek-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'].includes(aiModel)) {
+                aiModel = 'deepseek-flash';
+                GM_setValue('aiTikuModel', 'deepseek-flash');
+            }
+            let aiEffort = GM_getValue('aiTikuEffort', 'low') || 'low';
+            if (!['low', 'none', 'high', 'max'].includes(aiEffort)) {
+                aiEffort = 'low';
+            }
+
+            if (!aiEnable || !aiApiKey) {
+                callback({ code: -1, data: '未找到答案' });
+                return;
+            }
+
+            const reqBody = {
+                model: aiModel,
+                messages: messages,
+                stream: false,
+                reasoning_effort: aiEffort,
+                thinking: {
+                    type: aiEffort === 'none' ? 'disabled' : 'enabled'
+                }
+            };
+
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: 'https://api.deepseek.com/chat/completions',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + aiApiKey
+                },
+                data: JSON.stringify(reqBody),
+                timeout: 25000,
+                onload: function (res) {
+                    try {
+                        const json = JSON.parse(res.responseText);
+                        const msg = json.choices && json.choices[0] && json.choices[0].message;
+                        let content = (msg && msg.content) || '';
+                        if (content) {
+                            content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
+                            content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
+                            callback({ code: 1, data: content, from: 'DeepSeek (' + aiModel + ')' });
+                            return;
+                        }
+                    } catch (e) { }
+                    callback({ code: -1, data: '未找到答案' });
+                },
+                onerror: function () { callback({ code: -1, data: '未找到答案' }); },
+                ontimeout: function () { callback({ code: -1, data: '未找到答案' }); }
+            });
+        }
     }
 
     // 优先请求一之哥哥公共题库

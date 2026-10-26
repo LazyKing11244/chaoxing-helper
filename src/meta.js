@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name         【减负社区】【超星学习通小助手】【完全免费】视频-章节测试|自动挂机|防清进度|不占资源
+// @name         超星学习通助手 Next
 // @namespace    unrival
-// @version      5.0.4
+// @version      5.0.5
 // @homepageURL  https://github.com/LazyKing11244/chaoxing-helper
 // @supportURL   https://github.com/LazyKing11244/chaoxing-helper/issues
 // @updateURL    https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
 // @downloadURL  https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
-// @description  2026 重构维护版：修复换节后激活挂机状态丢失、优化单选多选判断匹配与填空拆分、支持后台静音保活持久化。
+// @description  超星学习通助手 Next：极简双栏控制面板、Web Worker 真后台防休眠挂机、支持 DeepSeek 与自定义 OpenAI 兼容大模型自动答题。
 // @author       unrival
 // @run-at       document-end
 // @storageName  unrivalxxt
@@ -20,12 +20,10 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @grant        GM_addValueChangeListener
 // @grant        GM_info
 // @connect      mooc1-1.chaoxing.com
 // @connect      mooc1.chaoxing.com
 // @connect      mooc1-2.chaoxing.com
-// @connect      passport2-api.chaoxing.com
 // @connect      cx.icodef.com
 // @connect      api.deepseek.com
 // @connect      *
