@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         超星学习通助手 Next
 // @namespace    unrival
-// @version      5.1.1
+// @version      5.1.2
 // @homepageURL  https://github.com/SlackHan/chaoxing-helper
 // @supportURL   https://github.com/SlackHan/chaoxing-helper/issues
 // @updateURL    https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js
@@ -22,6 +22,7 @@
 // @grant        GM_getValue
 // @grant        GM_info
 // @grant        GM_setClipboard
+// @grant        GM_download
 // @connect      mooc1-1.chaoxing.com
 // @connect      mooc1.chaoxing.com
 // @connect      mooc1-2.chaoxing.com

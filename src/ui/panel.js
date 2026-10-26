@@ -7,7 +7,7 @@ const CARDS_PANEL_HTML = `
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>超星学习通助手 Next v5.1.1</title>
+    <title>超星学习通助手 Next v5.1.2</title>
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport">
     <style>
         * { box-sizing: border-box; }
@@ -301,7 +301,7 @@ const CARDS_PANEL_HTML = `
     <div class="cx-container">
         <div class="cx-topbar">
             <h3 class="cx-title">
-                <a href="https://github.com/SlackHan/chaoxing-helper" target="_blank">超星学习通助手 Next v5.1.1</a>
+                <a href="https://github.com/SlackHan/chaoxing-helper" target="_blank">超星学习通助手 Next v5.1.2</a>
             </h3>
             <span class="cx-warn">提示：高倍速有清进度风险，建议 1 倍速运行</span>
         </div>
