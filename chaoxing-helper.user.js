@@ -2,10 +2,10 @@
 // @name         超星学习通助手 Next
 // @namespace    unrival
 // @version      5.1.0
-// @homepageURL  https://github.com/LazyKing11244/chaoxing-helper
-// @supportURL   https://github.com/LazyKing11244/chaoxing-helper/issues
-// @updateURL    https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
-// @downloadURL  https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
+// @homepageURL  https://github.com/SlackHan/chaoxing-helper
+// @supportURL   https://github.com/SlackHan/chaoxing-helper/issues
+// @updateURL    https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js
+// @downloadURL  https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js
 // @description  超星学习通助手 Next：极简双栏控制面板、Web Worker 真后台防休眠挂机、支持 DeepSeek 与自定义 OpenAI 兼容大模型自动答题。
 // @author       unrival
 // @run-at       document-end
@@ -1033,7 +1033,7 @@ const CARDS_PANEL_HTML = `
     <div class="cx-container">
         <div class="cx-topbar">
             <h3 class="cx-title">
-                <a href="https://github.com/LazyKing11244/chaoxing-helper" target="_blank">超星学习通助手 Next v5.0.5</a>
+                <a href="https://github.com/SlackHan/chaoxing-helper" target="_blank">超星学习通助手 Next v5.1.0</a>
             </h3>
             <span class="cx-warn">提示：高倍速有清进度风险，建议 1 倍速运行</span>
         </div>

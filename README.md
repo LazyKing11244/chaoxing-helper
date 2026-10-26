@@ -9,8 +9,8 @@
 
 确保浏览器已安装 **Tampermonkey (油猴)** 或 **ScriptCat (脚本猫)**，点击下方链接直接安装：
 
-- 🔗 **[GitHub Raw 安装（推荐）](https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js)**
-- ⚡ **[国内镜像加速安装](https://ghproxy.net/https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js)**
+- 🔗 **[GitHub Raw 安装（推荐）](https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js)**
+- ⚡ **[国内镜像加速安装](https://ghproxy.net/https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js)**
 
 ---
 

@@ -2,10 +2,10 @@
 // @name         超星学习通助手 Next
 // @namespace    unrival
 // @version      5.1.0
-// @homepageURL  https://github.com/LazyKing11244/chaoxing-helper
-// @supportURL   https://github.com/LazyKing11244/chaoxing-helper/issues
-// @updateURL    https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
-// @downloadURL  https://raw.githubusercontent.com/LazyKing11244/chaoxing-helper/main/chaoxing-helper.user.js
+// @homepageURL  https://github.com/SlackHan/chaoxing-helper
+// @supportURL   https://github.com/SlackHan/chaoxing-helper/issues
+// @updateURL    https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js
+// @downloadURL  https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js
 // @description  超星学习通助手 Next：极简双栏控制面板、Web Worker 真后台防休眠挂机、支持 DeepSeek 与自定义 OpenAI 兼容大模型自动答题。
 // @author       unrival
 // @run-at       document-end
