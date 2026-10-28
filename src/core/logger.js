@@ -24,3 +24,31 @@ const logs = {
         }
     }
 };
+
+function pushWorkLog(msg) {
+    if (!msg) return;
+    try {
+        if (_w.top) {
+            if (!Array.isArray(_w.top.unrivalWorkLogs)) {
+                _w.top.unrivalWorkLogs = [];
+            }
+            _w.top.unrivalWorkLogs.push(String(msg));
+        }
+    } catch (e) { }
+}
+
+function drainWorkLogs() {
+    const out = [];
+    try {
+        if (_w.top) {
+            if (Array.isArray(_w.top.unrivalWorkLogs) && _w.top.unrivalWorkLogs.length > 0) {
+                out.push(..._w.top.unrivalWorkLogs.splice(0));
+            }
+            if (_w.top.unrivalWorkInfo && typeof _w.top.unrivalWorkInfo === 'string') {
+                out.push(_w.top.unrivalWorkInfo);
+                _w.top.unrivalWorkInfo = '';
+            }
+        }
+    } catch (e) { }
+    return out;
+}

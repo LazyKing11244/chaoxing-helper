@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         超星学习通助手 Next
 // @namespace    unrival
-// @version      5.1.2
+// @version      5.1.3
 // @homepageURL  https://github.com/SlackHan/chaoxing-helper
 // @supportURL   https://github.com/SlackHan/chaoxing-helper/issues
 // @updateURL    https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js
@@ -729,10 +729,38 @@ const logs = {
     }
 };
 
+function pushWorkLog(msg) {
+    if (!msg) return;
+    try {
+        if (_w.top) {
+            if (!Array.isArray(_w.top.unrivalWorkLogs)) {
+                _w.top.unrivalWorkLogs = [];
+            }
+            _w.top.unrivalWorkLogs.push(String(msg));
+        }
+    } catch (e) { }
+}
 
-    // ==================== 模块: ui/panel.js ====================
+function drainWorkLogs() {
+    const out = [];
+    try {
+        if (_w.top) {
+            if (Array.isArray(_w.top.unrivalWorkLogs) && _w.top.unrivalWorkLogs.length > 0) {
+                out.push(..._w.top.unrivalWorkLogs.splice(0));
+            }
+            if (_w.top.unrivalWorkInfo && typeof _w.top.unrivalWorkInfo === 'string') {
+                out.push(_w.top.unrivalWorkInfo);
+                _w.top.unrivalWorkInfo = '';
+            }
+        }
+    } catch (e) { }
+    return out;
+}
+
+
+    // ==================== 模块: ui/template.js ====================
 // ==========================================
-// 课程卡片任务控制面板 HTML 渲染与交互事件绑定
+// 课程卡片任务控制面板 HTML 模板与渲染辅助
 // ==========================================
 
 const CARDS_PANEL_HTML = `
@@ -740,7 +768,7 @@ const CARDS_PANEL_HTML = `
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>超星学习通助手 Next v5.1.2</title>
+    <title>超星学习通助手 Next v5.1.3</title>
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport">
     <style>
         * { box-sizing: border-box; }
@@ -1034,7 +1062,7 @@ const CARDS_PANEL_HTML = `
     <div class="cx-container">
         <div class="cx-topbar">
             <h3 class="cx-title">
-                <a href="https://github.com/SlackHan/chaoxing-helper" target="_blank">超星学习通助手 Next v5.1.2</a>
+                <a href="https://github.com/SlackHan/chaoxing-helper" target="_blank">超星学习通助手 Next v5.1.3</a>
             </h3>
             <span class="cx-warn">提示：高倍速有清进度风险，建议 1 倍速运行</span>
         </div>
@@ -1242,6 +1270,22 @@ const CARDS_PANEL_HTML = `
 </html>
 `;
 
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+
+    // ==================== 模块: ui/panel.js ====================
+// ==========================================
+// 课程卡片任务控制面板交互事件绑定与速览渲染
+// ==========================================
+
 function bindPanelEvents() {
     const htmlHook = setInterval(function () {
         if (_d.getElementById('unrivalRate') && _d.getElementById('updateRateButton') && _d
@@ -1250,6 +1294,71 @@ function bindPanelEvents() {
             clearInterval(htmlHook);
             if (isMobile) {
                 logs.addLog('手机浏览器不保证能正常运行此脚本', 'orange');
+            }
+
+            function bindToggleSwitch(options) {
+                const {
+                    id,
+                    gmKey,
+                    defaultVal = '0',
+                    topProp,
+                    topType = 'string',
+                    size = 'btn-sm',
+                    textOn,
+                    textOff,
+                    onLog,
+                    offLog,
+                    onChange
+                } = options;
+
+                const btn = _d.getElementById(id);
+                if (!btn) return null;
+
+                const updateUI = (isActive) => {
+                    btn.setAttribute('class', 'btn ' + (isActive ? 'btn-success' : 'btn-default') + ' ' + size);
+                    if (isActive && textOn !== undefined) {
+                        btn.innerText = typeof textOn === 'function' ? textOn() : textOn;
+                    } else if (!isActive && textOff !== undefined) {
+                        btn.innerText = typeof textOff === 'function' ? textOff() : textOff;
+                    }
+                };
+
+                const isCurrentOn = GM_getValue(gmKey, defaultVal) === '1';
+                updateUI(isCurrentOn);
+                if (topProp && _w && _w.top) {
+                    _w.top[topProp] = topType === 'number' ? (isCurrentOn ? 1 : 0) : (isCurrentOn ? '1' : '0');
+                }
+                if (typeof onChange === 'function') {
+                    onChange(isCurrentOn);
+                }
+
+                btn.onclick = function () {
+                    const nextState = GM_getValue(gmKey, defaultVal) === '1' ? '0' : '1';
+                    const nextActive = nextState === '1';
+                    GM_setValue(gmKey, nextState);
+                    if (topProp && _w && _w.top) {
+                        _w.top[topProp] = topType === 'number' ? (nextActive ? 1 : 0) : (nextActive ? '1' : '0');
+                    }
+                    updateUI(nextActive);
+
+                    if (nextActive) {
+                        if (onLog) {
+                            const msg = typeof onLog === 'function' ? onLog() : onLog;
+                            if (msg) logs.addLog(msg, 'green');
+                        }
+                    } else {
+                        if (offLog) {
+                            const msg = typeof offLog === 'function' ? offLog() : offLog;
+                            if (msg) logs.addLog(msg, 'green');
+                        }
+                    }
+
+                    if (typeof onChange === 'function') {
+                        onChange(nextActive);
+                    }
+                };
+
+                return { btn, updateUI };
             }
 
             // 0. 题库面板折叠、Tab切换与清空日志
@@ -1383,12 +1492,14 @@ function bindPanelEvents() {
                 let nextActive = !currentActive;
                 if (nextActive) {
                     _w.top.backNow = 1;
+                    backNow = 1;
                     GM_setValue('unrivalbacknow', '1');
                     updateBgBtnUI(true);
                     if (typeof keepAliveAudio !== 'undefined') keepAliveAudio.start();
                     logs.addLog('挂机激活成功，您现在可以最小化页面了', 'green');
                 } else {
                     _w.top.backNow = 0;
+                    backNow = 0;
                     GM_setValue('unrivalbacknow', '0');
                     updateBgBtnUI(false);
                     if (typeof keepAliveAudio !== 'undefined') keepAliveAudio.stop();
@@ -1397,68 +1508,44 @@ function bindPanelEvents() {
             };
 
             // 5. 复习模式
-            _d.getElementById('reviewModeButton').onclick = function () {
-                let reviewButton = _d.getElementById('reviewModeButton');
-                if (reviewButton.getAttribute('class').includes('btn-default')) {
-                    _d.getElementById('reviewModeButton').setAttribute('class', 'btn btn-success btn-sm');
-                    logs.addLog('复习模式已开启，遇到已完成的视频任务不会跳过', 'green');
-                    GM_setValue('unrivalreview', '1');
-                    _w.top.unrivalReviewMode = '1';
-                } else {
-                    _d.getElementById('reviewModeButton').setAttribute('class', 'btn btn-default btn-sm');
-                    logs.addLog('复习模式已关闭，遇到已完成的视频任务会自动跳过', 'green');
-                    GM_setValue('unrivalreview', '0');
-                    _w.top.unrivalReviewMode = '0';
-                }
-            };
+            bindToggleSwitch({
+                id: 'reviewModeButton',
+                gmKey: 'unrivalreview',
+                defaultVal: '0',
+                topProp: 'unrivalReviewMode',
+                onLog: '复习模式已开启，遇到已完成的视频任务不会跳过',
+                offLog: '复习模式已关闭，遇到已完成的视频任务会自动跳过'
+            });
 
             // 6. 自动做题
-            _d.getElementById('autoDoWorkButton').onclick = function () {
-                let autoDoWorkButton = _d.getElementById('autoDoWorkButton');
-                if (autoDoWorkButton.getAttribute('class').includes('btn-default')) {
-                    _d.getElementById('autoDoWorkButton').setAttribute('class', 'btn btn-success btn-sm');
-                    logs.addLog('自动做章节测试已开启', 'green');
-                    GM_setValue('unrivaldowork', '1');
-                    _w.top.unrivalDoWork = '1';
-                } else {
-                    _d.getElementById('autoDoWorkButton').setAttribute('class', 'btn btn-default btn-sm');
-                    logs.addLog('自动做章节测试已关闭', 'green');
-                    GM_setValue('unrivaldowork', '0');
-                    _w.top.unrivalDoWork = '0';
-                }
-            };
+            bindToggleSwitch({
+                id: 'autoDoWorkButton',
+                gmKey: 'unrivaldowork',
+                defaultVal: '1',
+                topProp: 'unrivalDoWork',
+                onLog: '自动做章节测试已开启',
+                offLog: '自动做章节测试已关闭'
+            });
 
             // 7. 自动提交
-            _d.getElementById('autoSubmitButton').onclick = function () {
-                let autoSubmitButton = _d.getElementById('autoSubmitButton');
-                if (autoSubmitButton.getAttribute('class').includes('btn-default')) {
-                    _d.getElementById('autoSubmitButton').setAttribute('class', 'btn btn-success btn-sm');
-                    logs.addLog('符合标准的章节测试将会自动提交', 'green');
-                    GM_setValue('unrivalautosubmit', '1');
-                    _w.top.unrivalAutoSubmit = '1';
-                } else {
-                    _d.getElementById('autoSubmitButton').setAttribute('class', 'btn btn-default btn-sm');
-                    logs.addLog('章节测试将不会自动提交', 'green');
-                    GM_setValue('unrivalautosubmit', '0');
-                    _w.top.unrivalAutoSubmit = '0';
-                }
-            };
+            bindToggleSwitch({
+                id: 'autoSubmitButton',
+                gmKey: 'unrivalautosubmit',
+                defaultVal: '1',
+                topProp: 'unrivalAutoSubmit',
+                onLog: '符合标准的章节测试将会自动提交',
+                offLog: '章节测试将不会自动提交'
+            });
 
             // 8. 自动保存
-            _d.getElementById('autoSaveButton').onclick = function () {
-                let autoSaveButton = _d.getElementById('autoSaveButton');
-                if (autoSaveButton.getAttribute('class').includes('btn-default')) {
-                    _d.getElementById('autoSaveButton').setAttribute('class', 'btn btn-success btn-sm');
-                    logs.addLog('不符合提交标准的章节测试将会自动保存', 'green');
-                    GM_setValue('unrivalautosave', '1');
-                    _w.top.unrivalAutoSave = '1';
-                } else {
-                    _d.getElementById('autoSaveButton').setAttribute('class', 'btn btn-default btn-sm');
-                    logs.addLog('未达标的章节测试将不会自动保存，等待用户手动处理', 'green');
-                    GM_setValue('unrivalautosave', '0');
-                    _w.top.unrivalAutoSave = '0';
-                }
-            };
+            bindToggleSwitch({
+                id: 'autoSaveButton',
+                gmKey: 'unrivalautosave',
+                defaultVal: '0',
+                topProp: 'unrivalAutoSave',
+                onLog: '不符合提交标准的章节测试将会自动保存',
+                offLog: '未达标的章节测试将不会自动保存，等待用户手动处理'
+            });
 
             // 9. 跳转模式下拉框
             let jumpSelect = _d.getElementById('unrivalJumpTypeSelect');
@@ -1471,66 +1558,52 @@ function bindPanelEvents() {
             };
 
             // 10. 解除多端监控
-            let monitorBtn = _d.getElementById('disableMonitorButton');
-            let updateMonitorBtnUI = () => {
-                if (disableMonitor == 1) {
-                    monitorBtn.setAttribute('class', 'btn btn-success btn-sm');
-                    monitorBtn.innerText = '解除多端监控: 开';
-                } else {
-                    monitorBtn.setAttribute('class', 'btn btn-default btn-sm');
-                    monitorBtn.innerText = '解除多端监控: 关';
+            bindToggleSwitch({
+                id: 'disableMonitorButton',
+                gmKey: 'unrivaldisablemonitor',
+                defaultVal: '0',
+                topProp: 'unrivalDisableMonitor',
+                topType: 'number',
+                textOn: '解除多端监控: 开',
+                textOff: '解除多端监控: 关',
+                onLog: '已开启解除多端监控',
+                offLog: '已关闭解除多端监控',
+                onChange: (active) => {
+                    disableMonitor = active ? 1 : 0;
+                    if (_w && _w.top) _w.top.unrivalDisableMonitor = disableMonitor;
                 }
-            };
-            updateMonitorBtnUI();
-            monitorBtn.onclick = function () {
-                disableMonitor = disableMonitor == 1 ? 0 : 1;
-                GM_setValue('unrivaldisablemonitor', String(disableMonitor));
-                _w.top.unrivalDisableMonitor = disableMonitor;
-                updateMonitorBtnUI();
-                logs.addLog(disableMonitor == 1 ? '已开启解除多端监控' : '已关闭解除多端监控', 'green');
-            };
+            });
 
             // 11. 盲猜
-            let randomDoBtn = _d.getElementById('randomDoButton');
-            let updateRandomDoBtnUI = () => {
-                if (randomDo == 1) {
-                    randomDoBtn.setAttribute('class', 'btn btn-success btn-sm');
-                    randomDoBtn.innerText = '无答案盲猜: 开';
-                } else {
-                    randomDoBtn.setAttribute('class', 'btn btn-default btn-sm');
-                    randomDoBtn.innerText = '无答案盲猜: 关';
+            bindToggleSwitch({
+                id: 'randomDoButton',
+                gmKey: 'unrivalrandomdo',
+                defaultVal: '1',
+                topProp: 'unrivalRandomDo',
+                topType: 'number',
+                textOn: '无答案盲猜: 开',
+                textOff: '无答案盲猜: 关',
+                onLog: '已开启无答案盲猜（单选选B/多选全选/判断选错）',
+                offLog: '已关闭无答案盲猜',
+                onChange: (active) => {
+                    randomDo = active ? 1 : 0;
+                    if (_w && _w.top) _w.top.unrivalRandomDo = randomDo;
                 }
-            };
-            updateRandomDoBtnUI();
-            randomDoBtn.onclick = function () {
-                randomDo = randomDo == 1 ? 0 : 1;
-                GM_setValue('unrivalrandomdo', String(randomDo));
-                _w.top.unrivalRandomDo = randomDo;
-                updateRandomDoBtnUI();
-                logs.addLog(randomDo == 1 ? '已开启无答案盲猜（单选选B/多选全选/判断选错）' : '已关闭无答案盲猜', 'green');
-            };
+            });
 
             // 12. 自定义备用题库
             _d.getElementById('customTikuUrl').value = GM_getValue('customTikuUrl', '');
             _d.getElementById('customTikuToken').value = GM_getValue('customTikuToken', '');
-            let customToggleBtn = _d.getElementById('toggleCustomTiku');
-            let updateCustomTikuUI = () => {
-                let isCustomOn = GM_getValue('customTikuEnable', '0') === '1';
-                if (isCustomOn) {
-                    customToggleBtn.setAttribute('class', 'btn btn-success btn-xs');
-                    customToggleBtn.innerText = '已启用';
-                } else {
-                    customToggleBtn.setAttribute('class', 'btn btn-default btn-xs');
-                    customToggleBtn.innerText = '已禁用';
-                }
-            };
-            updateCustomTikuUI();
-            customToggleBtn.onclick = function () {
-                let nextState = GM_getValue('customTikuEnable', '0') === '1' ? '0' : '1';
-                GM_setValue('customTikuEnable', nextState);
-                updateCustomTikuUI();
-                logs.addLog(nextState === '1' ? '已启用自定义备用题库' : '已禁用自定义备用题库', 'green');
-            };
+            bindToggleSwitch({
+                id: 'toggleCustomTiku',
+                gmKey: 'customTikuEnable',
+                defaultVal: '0',
+                size: 'btn-xs',
+                textOn: '已启用',
+                textOff: '已禁用',
+                onLog: '已启用自定义备用题库',
+                offLog: '已禁用自定义备用题库'
+            });
             _d.getElementById('saveCustomTiku').onclick = function () {
                 let u = _d.getElementById('customTikuUrl').value.trim();
                 let t = _d.getElementById('customTikuToken').value.trim();
@@ -1548,7 +1621,6 @@ function bindPanelEvents() {
             const aiEffortRow = _d.getElementById('aiEffortRow');
             const aiTikuEffortSelect = _d.getElementById('aiTikuEffort');
             const aiApiKeyInput = _d.getElementById('aiTikuApiKey');
-            const aiToggleBtn = _d.getElementById('toggleAiTiku');
             const saveAiBtn = _d.getElementById('saveAiTiku');
             const testAiBtn = _d.getElementById('testAiTiku');
             const testStatusSpan = _d.getElementById('aiTestStatus');
@@ -1603,28 +1675,16 @@ function bindPanelEvents() {
                 };
             }
 
-            const updateAiTikuUI = () => {
-                const isAiOn = GM_getValue('aiTikuEnable', '0') === '1';
-                if (aiToggleBtn) {
-                    if (isAiOn) {
-                        aiToggleBtn.setAttribute('class', 'btn btn-success btn-xs');
-                        aiToggleBtn.innerText = '已启用';
-                    } else {
-                        aiToggleBtn.setAttribute('class', 'btn btn-default btn-xs');
-                        aiToggleBtn.innerText = '已禁用';
-                    }
-                }
-            };
-            updateAiTikuUI();
-            if (aiToggleBtn) {
-                aiToggleBtn.onclick = function () {
-                    const nextState = GM_getValue('aiTikuEnable', '0') === '1' ? '0' : '1';
-                    GM_setValue('aiTikuEnable', nextState);
-                    updateAiTikuUI();
-                    const pName = (aiProviderSelect && aiProviderSelect.value === 'custom') ? '自定义 AI' : 'DeepSeek AI';
-                    logs.addLog(nextState === '1' ? '已启用 ' + pName + ' 智能答题' : '已禁用 ' + pName + ' 智能答题', 'green');
-                };
-            }
+            bindToggleSwitch({
+                id: 'toggleAiTiku',
+                gmKey: 'aiTikuEnable',
+                defaultVal: '0',
+                size: 'btn-xs',
+                textOn: '已启用',
+                textOff: '已禁用',
+                onLog: () => '已启用 ' + ((aiProviderSelect && aiProviderSelect.value === 'custom') ? '自定义 AI' : 'DeepSeek AI') + ' 智能答题',
+                offLog: () => '已禁用 ' + ((aiProviderSelect && aiProviderSelect.value === 'custom') ? '自定义 AI' : 'DeepSeek AI') + ' 智能答题'
+            });
 
             if (saveAiBtn) {
                 saveAiBtn.onclick = function () {
@@ -1691,59 +1751,31 @@ function bindPanelEvents() {
                         testAiBtn.style.opacity = '0.6';
                         if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: #31708f;">⏳ 正在测试自定义 AI 接口连通性...</span>';
 
-                        const targetUrl = normalizeAiEndpoint(rawUrl);
-                        const startTime = Date.now();
-
-                        GM_xmlhttpRequest({
-                            method: 'POST',
-                            url: targetUrl,
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ' + apiKey
-                            },
-                            data: JSON.stringify({
-                                model: model,
-                                messages: [
-                                    { role: 'user', content: '单选题：1+1等于几？A.1 B.2。请仅输出正确选项字母，不要任何解释。' }
-                                ],
-                                stream: false
-                            }),
+                        requestAiCompletion({
+                            provider: 'custom',
+                            apiKey: apiKey,
+                            rawUrl: rawUrl,
+                            model: model,
+                            messages: [
+                                { role: 'user', content: '请仅回复 OK 两个字母，不要包含任何其他内容。' }
+                            ],
                             timeout: 15000,
-                            onload: function (chatRes) {
+                            onSuccess: function ({ content, ms }) {
                                 resetBtn();
-                                const ms = Date.now() - startTime;
-                                if (chatRes.status === 200) {
-                                    try {
-                                        const chatJson = JSON.parse(chatRes.responseText);
-                                        const reply = chatJson.choices && chatJson.choices[0] && chatJson.choices[0].message && chatJson.choices[0].message.content;
-                                        if (reply) {
-                                            const cleanReply = reply.trim().replace(/^```[a-z]*\s*/i, '').replace(/```$/i, '').trim();
-                                            if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: green;">✅ 可用 | 模型: ' + model + ' | 响应: "' + cleanReply + '" (' + ms + ' ms)</span>';
-                                            logs.addLog('自定义 AI 测试成功！模型: ' + model + ' | 响应: "' + cleanReply + '" (' + ms + ' ms)', 'green');
-                                            return;
-                                        }
-                                    } catch (e) { }
+                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: green;">✅ 可用 | 模型: ' + model + ' | 响应: "' + content + '" (' + ms + ' ms)</span>';
+                                logs.addLog('自定义 AI 测试成功！模型: ' + model + ' | 响应: "' + content + '" (' + ms + ' ms)', 'green');
+                            },
+                            onError: function ({ status, message, isNetworkError }) {
+                                resetBtn();
+                                if (isNetworkError) {
+                                    const errDisplay = '❌ 对话接口网络错误: ' + message;
+                                    if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                    logs.addLog('自定义 AI 连通错误: ' + errDisplay, 'red');
+                                } else {
+                                    const errDisplay = '❌ 连通测试失败 [HTTP ' + status + ']: ' + message;
+                                    if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                    logs.addLog('自定义 AI 连通测试失败: ' + errDisplay, 'red');
                                 }
-
-                                let errMsg = '';
-                                try {
-                                    const errJson = JSON.parse(chatRes.responseText);
-                                    if (errJson.error && errJson.error.message) errMsg = errJson.error.message;
-                                } catch (e) { }
-                                const errDisplay = '❌ 连通测试失败 [HTTP ' + chatRes.status + ']: ' + (errMsg || chatRes.statusText || '请求异常');
-                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
-                                logs.addLog('自定义 AI 连通测试失败: ' + errDisplay, 'red');
-                            },
-                            onerror: function (err) {
-                                resetBtn();
-                                const errDisplay = '❌ 对话接口网络错误: ' + ((err && err.error) || '连接异常');
-                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
-                                logs.addLog('自定义 AI 连通错误: ' + errDisplay, 'red');
-                            },
-                            ontimeout: function () {
-                                resetBtn();
-                                if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 对话接口请求超时 (15s)</span>';
-                                logs.addLog('自定义 AI 连通请求超时 (15s)', 'red');
                             }
                         });
                     } else {
@@ -1810,59 +1842,31 @@ function bindPanelEvents() {
                                 }
 
                                 // 第2步：验证对话接口
-                                const startTime = Date.now();
-                                GM_xmlhttpRequest({
-                                    method: 'POST',
-                                    url: 'https://api.deepseek.com/chat/completions',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': 'Bearer ' + apiKey
-                                    },
-                                    data: JSON.stringify({
-                                        model: model,
-                                        messages: [
-                                            { role: 'user', content: '单选题：1+1等于几？A.1 B.2。请仅输出正确选项字母，不要任何解释。' }
-                                        ],
-                                        stream: false,
-                                        reasoning_effort: 'none',
-                                        thinking: { type: 'disabled' }
-                                    }),
+                                requestAiCompletion({
+                                    provider: 'deepseek',
+                                    apiKey: apiKey,
+                                    model: model,
+                                    effort: effort,
+                                    messages: [
+                                        { role: 'user', content: '请仅回复 OK 两个字母，不要包含任何其他内容。' }
+                                    ],
                                     timeout: 15000,
-                                    onload: function (chatRes) {
+                                    onSuccess: function ({ content, ms }) {
                                         resetBtn();
-                                        const ms = Date.now() - startTime;
-                                        if (chatRes.status === 200) {
-                                            try {
-                                                const chatJson = JSON.parse(chatRes.responseText);
-                                                const reply = chatJson.choices && chatJson.choices[0] && chatJson.choices[0].message && chatJson.choices[0].message.content;
-                                                if (reply) {
-                                                    const cleanReply = reply.trim();
-                                                    if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: green;">✅ 可用 | 余额: ' + balanceStr + ' | 响应: "' + cleanReply + '" (' + ms + 'ms)</span>';
-                                                    logs.addLog('DeepSeek 测试成功！可用余额: ' + balanceStr + ' | 模型: ' + model + ' | 响应: "' + cleanReply + '" (' + ms + 'ms)', 'green');
-                                                    return;
-                                                }
-                                            } catch (e) { }
+                                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: green;">✅ 可用 | 余额: ' + balanceStr + ' | 响应: "' + content + '" (' + ms + 'ms)</span>';
+                                        logs.addLog('DeepSeek 测试成功！可用余额: ' + balanceStr + ' | 模型: ' + model + ' | 响应: "' + content + '" (' + ms + 'ms)', 'green');
+                                    },
+                                    onError: function ({ status, message, isNetworkError }) {
+                                        resetBtn();
+                                        if (isNetworkError) {
+                                            const errDisplay = '❌ 对话接口网络错误: ' + message;
+                                            if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                            logs.addLog('DeepSeek 连通错误: ' + errDisplay, 'red');
+                                        } else {
+                                            const errDisplay = '❌ 连通测试失败 [HTTP ' + status + ']: ' + message;
+                                            if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
+                                            logs.addLog('DeepSeek 连通测试失败: ' + errDisplay, 'red');
                                         }
-
-                                        let errMsg = '';
-                                        try {
-                                            const errJson = JSON.parse(chatRes.responseText);
-                                            if (errJson.error && errJson.error.message) errMsg = errJson.error.message;
-                                        } catch (e) { }
-                                        const errDisplay = '❌ 连通测试失败 [HTTP ' + chatRes.status + ']: ' + (errMsg || chatRes.statusText || '请求异常');
-                                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
-                                        logs.addLog('DeepSeek 连通测试失败: ' + errDisplay, 'red');
-                                    },
-                                    onerror: function (err) {
-                                        resetBtn();
-                                        const errDisplay = '❌ 对话接口网络错误: ' + ((err && err.error) || '连接异常');
-                                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">' + errDisplay + '</span>';
-                                        logs.addLog('DeepSeek 连通错误: ' + errDisplay, 'red');
-                                    },
-                                    ontimeout: function () {
-                                        resetBtn();
-                                        if (testStatusSpan) testStatusSpan.innerHTML = '<span style="color: red;">❌ 对话接口请求超时 (15s)</span>';
-                                        logs.addLog('DeepSeek 连通请求超时 (15s)', 'red');
                                     }
                                 });
                             },
@@ -1922,15 +1926,6 @@ function copyToClipboard(text, el) {
     }
 }
 
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
 
 function renderQuizSummary(results) {
     const panel = _d.getElementById('quizSummaryPanel');
@@ -2011,6 +2006,110 @@ function normalizeAiEndpoint(rawUrl) {
     return url + '/v1/chat/completions';
 }
 
+function requestAiCompletion(options) {
+    const {
+        provider,
+        apiKey,
+        rawUrl,
+        model,
+        effort,
+        messages,
+        timeout = 25000,
+        onSuccess,
+        onError
+    } = options;
+
+    let targetUrl;
+    let reqBody;
+
+    if (provider === 'custom') {
+        targetUrl = normalizeAiEndpoint(rawUrl);
+        reqBody = {
+            model: model,
+            messages: messages,
+            stream: false
+        };
+    } else {
+        targetUrl = 'https://api.deepseek.com/chat/completions';
+        reqBody = {
+            model: model,
+            messages: messages,
+            stream: false,
+            reasoning_effort: effort,
+            thinking: {
+                type: effort === 'none' ? 'disabled' : 'enabled'
+            }
+        };
+    }
+
+    const startTime = Date.now();
+
+    GM_xmlhttpRequest({
+        method: 'POST',
+        url: targetUrl,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey
+        },
+        data: JSON.stringify(reqBody),
+        timeout: timeout,
+        onload: function (res) {
+            const ms = Date.now() - startTime;
+            if (res.status >= 200 && res.status < 300) {
+                try {
+                    const json = JSON.parse(res.responseText);
+                    const msg = json.choices && json.choices[0] && json.choices[0].message;
+                    let content = (msg && msg.content) || '';
+                    if (content) {
+                        content = content.trim().replace(/^```[a-z]*\s*/i, '').replace(/```$/i, '').trim();
+                        if (content) {
+                            if (typeof onSuccess === 'function') {
+                                onSuccess({ content, ms, res });
+                            }
+                            return;
+                        }
+                    }
+                } catch (e) { }
+            }
+
+            let errMsg = '';
+            try {
+                const errJson = JSON.parse(res.responseText);
+                if (errJson.error && errJson.error.message) {
+                    errMsg = errJson.error.message;
+                }
+            } catch (e) { }
+
+            if (typeof onError === 'function') {
+                onError({
+                    status: res.status,
+                    message: errMsg || res.statusText || '请求异常',
+                    isNetworkError: false,
+                    res
+                });
+            }
+        },
+        onerror: function (err) {
+            if (typeof onError === 'function') {
+                onError({
+                    status: 0,
+                    message: (err && err.error) || '连接异常或超时',
+                    isNetworkError: true
+                });
+            }
+        },
+        ontimeout: function (err) {
+            if (typeof onError === 'function') {
+                onError({
+                    status: 0,
+                    message: (err && err.error) || '连接异常或超时',
+                    isNetworkError: true
+                });
+            }
+        }
+    });
+}
+
 function searchQuestionAnswer(quItem, callback, widParam) {
     const curToken = GM_getValue('tikutoken', '') || '';
     const currentWid = widParam || '';
@@ -2086,7 +2185,6 @@ function searchQuestionAnswer(quItem, callback, widParam) {
 
         if (aiProvider === 'custom') {
             const rawCustomUrl = GM_getValue('aiCustomUrl', '');
-            const customUrl = normalizeAiEndpoint(rawCustomUrl);
             const customModel = (GM_getValue('aiCustomModel', '') || '').trim();
             const customKey = (GM_getValue('aiCustomApiKey', '') || '').trim();
 
@@ -2095,37 +2193,24 @@ function searchQuestionAnswer(quItem, callback, widParam) {
                 return;
             }
 
-            const reqBody = {
+            requestAiCompletion({
+                provider: 'custom',
+                apiKey: customKey,
+                rawUrl: rawCustomUrl,
                 model: customModel,
                 messages: messages,
-                stream: false
-            };
-
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: customUrl,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + customKey
-                },
-                data: JSON.stringify(reqBody),
                 timeout: 25000,
-                onload: function (res) {
-                    try {
-                        const json = JSON.parse(res.responseText);
-                        const msg = json.choices && json.choices[0] && json.choices[0].message;
-                        let content = (msg && msg.content) || '';
-                        if (content) {
-                            content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
-                            content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
-                            callback({ code: 1, data: content, from: '自定义AI (' + customModel + ')' });
-                            return;
-                        }
-                    } catch (e) { }
-                    callback({ code: -1, data: '未找到答案' });
+                onSuccess: function ({ content }) {
+                    const cleanAnswer = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
+                    if (cleanAnswer) {
+                        callback({ code: 1, data: cleanAnswer, from: '自定义AI (' + customModel + ')' });
+                    } else {
+                        callback({ code: -1, data: '未找到答案' });
+                    }
                 },
-                onerror: function () { callback({ code: -1, data: '未找到答案' }); },
-                ontimeout: function () { callback({ code: -1, data: '未找到答案' }); }
+                onError: function () {
+                    callback({ code: -1, data: '未找到答案' });
+                }
             });
         } else {
             // DeepSeek 官方
@@ -2145,41 +2230,24 @@ function searchQuestionAnswer(quItem, callback, widParam) {
                 return;
             }
 
-            const reqBody = {
+            requestAiCompletion({
+                provider: 'deepseek',
+                apiKey: aiApiKey,
                 model: aiModel,
+                effort: aiEffort,
                 messages: messages,
-                stream: false,
-                reasoning_effort: aiEffort,
-                thinking: {
-                    type: aiEffort === 'none' ? 'disabled' : 'enabled'
-                }
-            };
-
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: 'https://api.deepseek.com/chat/completions',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + aiApiKey
-                },
-                data: JSON.stringify(reqBody),
                 timeout: 25000,
-                onload: function (res) {
-                    try {
-                        const json = JSON.parse(res.responseText);
-                        const msg = json.choices && json.choices[0] && json.choices[0].message;
-                        let content = (msg && msg.content) || '';
-                        if (content) {
-                            content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
-                            content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
-                            callback({ code: 1, data: content, from: 'DeepSeek (' + aiModel + ')' });
-                            return;
-                        }
-                    } catch (e) { }
-                    callback({ code: -1, data: '未找到答案' });
+                onSuccess: function ({ content }) {
+                    const cleanAnswer = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
+                    if (cleanAnswer) {
+                        callback({ code: 1, data: cleanAnswer, from: 'DeepSeek (' + aiModel + ')' });
+                    } else {
+                        callback({ code: -1, data: '未找到答案' });
+                    }
                 },
-                onerror: function () { callback({ code: -1, data: '未找到答案' }); },
-                ontimeout: function () { callback({ code: -1, data: '未找到答案' }); }
+                onError: function () {
+                    callback({ code: -1, data: '未找到答案' });
+                }
             });
         }
     }
@@ -2286,9 +2354,7 @@ function parseQuestionsFromDom() {
 
         // 支持 0:单选, 1:多选, 2:填空, 3:判断
         if (['0', '1', '2', '3'].indexOf(typeN) < 0) {
-            if (_w.top && _w.top.unrivalWorkInfo !== undefined) {
-                _w.top.unrivalWorkInfo = '遇到暂不支持的题型(题型代码:' + typeN + ')，已跳过';
-            }
+            pushWorkLog('遇到暂不支持的题型(题型代码:' + typeN + ')，已跳过');
             continue;
         }
 
@@ -2345,6 +2411,36 @@ function applyQuestionAnswer(res, quu, contextObj) {
     const ctResult = res || { 'code': -1, 'data': '未找到答案' };
     let isMatched = false;
 
+    function clickOptionByLetter(letter) {
+        if (!letter) return false;
+        const targetLtr = String(letter).trim().toUpperCase();
+        for (let y = 0, j = choiceEs.length; y < j; y++) {
+            const em = choiceEs[y].getElementsByTagName('em');
+            if (em.length < 1) continue;
+            const emLetter = (em[0].getAttribute('id-param') || em[0].innerText || '').trim();
+            if (emLetter.toUpperCase() === targetLtr && choiceEs[y].getAttribute('id-param') === cleanQId) {
+                const cls = choiceEs[y].getAttribute('class') || '';
+                if (!cls.includes('cur')) {
+                    choiceEs[y].click();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function clickJudgeOption(valStr, requireEm = false) {
+        const targetVal = String(valStr);
+        for (let u = 0, k = choiceEs.length; u < k; u++) {
+            if (requireEm && choiceEs[u].getElementsByTagName('em').length < 1) continue;
+            if (choiceEs[u].getAttribute('val-param') === targetVal && choiceEs[u].getAttribute('id-param') === cleanQId) {
+                choiceEs[u].click();
+                return true;
+            }
+        }
+        return false;
+    }
+
     const handleAnswerMatched = () => {
         isMatched = true;
         if (typeof onAnswerMatched === 'function') {
@@ -2369,39 +2465,33 @@ function applyQuestionAnswer(res, quu, contextObj) {
 
     try {
         if (ctResult['code'] !== 1) {
-            _w.top.unrivalWorkInfo = '题目：' + quu['question'] + '：未搜索到答案';
+            pushWorkLog('题目：' + quu['question'] + '：未搜索到答案');
 
             // 未命中答案时的盲猜机制（当允许盲猜且合格正确率不为100%时）
             if (curRandomDo == 1 && curAccuracy < 100) {
                 if (quu['type'] === '判断题') {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未找到答案，自动选【错】';
-                    for (let u = 0, k = choiceEs.length; u < k; u++) {
-                        if (choiceEs[u].getElementsByTagName('em').length < 1) continue;
-                        if (choiceEs[u].getAttribute('val-param') === 'false' && choiceEs[u].getAttribute('id-param') === cleanQId) {
-                            choiceEs[u].click();
-                            return;
-                        }
-                    }
+                    pushWorkLog(quu['question'] + '：未找到答案，自动选【错】');
+                    if (clickJudgeOption('false', true)) return;
                 } else if (quu['type'] === '单选题') {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未找到答案，自动选【B】';
-                    for (let y = 0, j = choiceEs.length; y < j; y++) {
-                        const em = choiceEs[y].getElementsByTagName('em');
-                        if (em.length < 1) continue;
-                        const emLetter = (em[0].getAttribute('id-param') || em[0].innerText || '').trim();
-                        if (emLetter === 'B' && choiceEs[y].getAttribute('id-param') === cleanQId) {
-                            if (!choiceEs[y].getAttribute('class').includes('cur')) {
-                                choiceEs[y].click();
-                            }
-                            return;
+                    pushWorkLog(quu['question'] + '：未找到答案，自动选【B】');
+                    if (clickOptionByLetter('B')) return;
+                } else if (quu['type'] === '多选题') {
+                    pushWorkLog(quu['question'] + '：未找到答案，自动全选');
+                    let clicked = false;
+                    for (let option in quu['options']) {
+                        if (option === 'length') continue;
+                        if (clickOptionByLetter(quu['options'][option]['value'])) {
+                            clicked = true;
                         }
                     }
-                } else if (quu['type'] === '多选题') {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未找到答案，自动全选';
-                    for (let y = 0, j = choiceEs.length; y < j; y++) {
-                        if (choiceEs[y].getElementsByTagName('em').length < 1) continue;
-                        if (choiceEs[y].getAttribute('id-param') === cleanQId) {
-                            if (!choiceEs[y].getAttribute('class').includes('cur')) {
-                                choiceEs[y].click();
+                    if (!clicked) {
+                        for (let y = 0, j = choiceEs.length; y < j; y++) {
+                            if (choiceEs[y].getElementsByTagName('em').length < 1) continue;
+                            if (choiceEs[y].getAttribute('id-param') === cleanQId) {
+                                const cls = choiceEs[y].getAttribute('class') || '';
+                                if (!cls.includes('cur')) {
+                                    choiceEs[y].click();
+                                }
                             }
                         }
                     }
@@ -2411,7 +2501,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
         }
 
         const result = ctResult['data'];
-        _w.top.unrivalWorkInfo = (ctResult['from'] ? '[' + ctResult['from'] + '] ' : '') + '题目：' + quu['question'] + '：' + (typeof result === 'object' ? JSON.stringify(result) : result);
+        pushWorkLog((ctResult['from'] ? '[' + ctResult['from'] + '] ' : '') + '题目：' + quu['question'] + '：' + (typeof result === 'object' ? JSON.stringify(result) : result));
 
         switch (quu['type']) {
             case '判断题': {
@@ -2426,12 +2516,9 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 }
 
                 if (answer) {
-                    for (let u = 0, k = choiceEs.length; u < k; u++) {
-                        if (choiceEs[u].getAttribute('val-param') === answer && choiceEs[u].getAttribute('id-param') === cleanQId) {
-                            choiceEs[u].click();
-                            handleAnswerMatched();
-                            return;
-                        }
+                    if (clickJudgeOption(answer)) {
+                        handleAnswerMatched();
+                        return;
                     }
                 }
 
@@ -2439,47 +2526,20 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 const letterMatch = s.match(/^([A-Ba-b])(?:\.|\、|\:|\s|$)/);
                 if (letterMatch) {
                     const targetLtr = letterMatch[1].toUpperCase();
-                    for (let u = 0, k = choiceEs.length; u < k; u++) {
-                        const em = choiceEs[u].getElementsByTagName('em');
-                        if (em.length < 1) continue;
-                        const emLtr = (em[0].getAttribute('id-param') || em[0].innerText || '').trim().toUpperCase();
-                        if (emLtr === targetLtr && choiceEs[u].getAttribute('id-param') === cleanQId) {
-                            choiceEs[u].click();
-                            handleAnswerMatched();
-                            return;
-                        }
+                    if (clickOptionByLetter(targetLtr)) {
+                        handleAnswerMatched();
+                        return;
                     }
                 }
 
                 if (curRandomDo == 1 && curAccuracy < 100) {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到判断结果，自动选【错】';
-                    for (let u = 0, k = choiceEs.length; u < k; u++) {
-                        if (choiceEs[u].getElementsByTagName('em').length < 1) continue;
-                        if (choiceEs[u].getAttribute('val-param') === 'false' && choiceEs[u].getAttribute('id-param') === cleanQId) {
-                            choiceEs[u].click();
-                            return;
-                        }
-                    }
+                    pushWorkLog(quu['question'] + '：未匹配到判断结果，自动选【错】');
+                    if (clickJudgeOption('false', true)) return;
                 }
                 break;
             }
 
             case '单选题': {
-                function clickOptionByLetter(letter) {
-                    for (let y = 0, j = choiceEs.length; y < j; y++) {
-                        const em = choiceEs[y].getElementsByTagName('em');
-                        if (em.length < 1) continue;
-                        const emLetter = (em[0].getAttribute('id-param') || em[0].innerText || '').trim();
-                        if (emLetter.toUpperCase() === letter.toUpperCase() && choiceEs[y].getAttribute('id-param') === cleanQId) {
-                            if (!choiceEs[y].getAttribute('class').includes('cur')) {
-                                choiceEs[y].click();
-                            }
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-
                 const cleanRes = String(result).trim();
                 const s = cleanRes.replace(/^(?:答案|正确答案|选项)[:：\s]*/i, '').replace(/[*_`【】\(\)\[\]"']/g, '').trim();
 
@@ -2520,28 +2580,13 @@ function applyQuestionAnswer(res, quu, contextObj) {
 
                 // 4. 盲猜
                 if (curRandomDo == 1 && curAccuracy < 100) {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到正确答案，自动选【B】';
+                    pushWorkLog(quu['question'] + '：未匹配到正确答案，自动选【B】');
                     clickOptionByLetter('B');
                 }
                 break;
             }
 
             case '多选题': {
-                function clickOptionByLetter(letter) {
-                    for (let y = 0, j = choiceEs.length; y < j; y++) {
-                        const em = choiceEs[y].getElementsByTagName('em');
-                        if (em.length < 1) continue;
-                        const emLetter = (em[0].getAttribute('id-param') || em[0].innerText || '').trim();
-                        if (emLetter.toUpperCase() === letter.toUpperCase() && choiceEs[y].getAttribute('id-param') === cleanQId) {
-                            if (!choiceEs[y].getAttribute('class').includes('cur')) {
-                                choiceEs[y].click();
-                            }
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-
                 const matchedLetters = new Set();
                 if (Array.isArray(result)) {
                     for (let item of result) {
@@ -2588,7 +2633,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 if (hasAnswer) {
                     handleAnswerMatched();
                 } else if (curRandomDo == 1 && curAccuracy < 100) {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到正确答案，自动全选';
+                    pushWorkLog(quu['question'] + '：未匹配到正确答案，自动全选');
                     for (let option in quu['options']) {
                         if (option === 'length') continue;
                         clickOptionByLetter(quu['options'][option]['value']);
@@ -2660,6 +2705,63 @@ function applyQuestionAnswer(res, quu, contextObj) {
 // 路由模块: knowledge/cards (任务调度、视频/音频/文档/测验 iframe 控制)
 // ==========================================
 
+function fallbackOpenUrl(url) {
+    try {
+        const tempA = _d.createElement('a');
+        tempA.href = url;
+        tempA.target = '_blank';
+        tempA.rel = 'noopener';
+        tempA.referrerPolicy = 'no-referrer-when-downgrade';
+        _d.body.appendChild(tempA);
+        tempA.click();
+        _d.body.removeChild(tempA);
+    } catch (e) {
+        window.open(url, '_blank');
+    }
+}
+
+function extractMArgParam(doc) {
+    const scripts = (doc || _d).getElementsByTagName('script');
+    for (let i = 0, l = scripts.length; i < l; i++) {
+        const text = scripts[i].innerHTML;
+        if (text.indexOf('mArg = "";') !== -1 && text.indexOf('==UserScript==') === -1) {
+            const start = 'try{\n    mArg = ';
+            const end = ';\n}catch(e){';
+            const sIdx = text.indexOf(start);
+            const eIdx = text.indexOf(end);
+            if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
+                return text.substring(sIdx + start.length, eIdx);
+            }
+        }
+    }
+    return null;
+}
+
+function notifyAllDoneOrJump(emptyPage = false) {
+    let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
+    const desc = emptyPage ? '此页无任务' : '所有任务处理完毕';
+    if (curJump != 2) {
+        _w.top.jump = true;
+        logs.addLog(desc + '，5秒后自动进入下一章', 'green');
+    } else {
+        logs.addLog(desc + '，用户设置为不跳转，脚本已就绪', 'green');
+    }
+}
+
+function markMissionDone(missionList, jobid, delayMs = 0) {
+    const applyDone = () => {
+        if (missionList && missionList['m' + jobid]) {
+            missionList['m' + jobid]['running'] = false;
+            missionList['m' + jobid]['done'] = true;
+        }
+    };
+    if (delayMs > 0) {
+        setTimeout(applyDone, delayMs);
+    } else {
+        applyDone();
+    }
+}
+
 function initCardsPage() {
     let spans = _d.getElementsByTagName('span');
     for (let i = 0, l = spans.length; i < l; i++) {
@@ -2676,17 +2778,7 @@ function initCardsPage() {
     _w.top.unrivalPageRd = String(Math.random());
 
     let busyThread = 0;
-    const getStr = (str, start, end) => {
-        let res = str.substring(str.indexOf(start), str.indexOf(end)).replace(start, '');
-        return res;
-    };
-    const scripts = _d.getElementsByTagName('script');
-    let param = null;
-    for (let i = 0, l = scripts.length; i < l; i++) {
-        if (scripts[i].innerHTML.indexOf('mArg = "";') !== -1 && scripts[i].innerHTML.indexOf('==UserScript==') === -1) {
-            param = getStr(scripts[i].innerHTML, 'try{\n    mArg = ', ';\n}catch(e){');
-        }
-    }
+    const param = extractMArgParam(_d);
     if (param === null) return;
 
     let vrefer;
@@ -2700,21 +2792,6 @@ function initCardsPage() {
 
     _d.getElementsByTagName("html")[0].innerHTML = CARDS_PANEL_HTML;
     bindPanelEvents();
-
-    const fallbackOpenUrl = (url) => {
-        try {
-            const tempA = _d.createElement('a');
-            tempA.href = url;
-            tempA.target = '_blank';
-            tempA.rel = 'noopener';
-            tempA.referrerPolicy = 'no-referrer-when-downgrade';
-            _d.body.appendChild(tempA);
-            tempA.click();
-            _d.body.removeChild(tempA);
-        } catch (e) {
-            window.open(url, '_blank');
-        }
-    };
 
     const downloadMedia = (url, name) => {
         if (!url) {
@@ -2828,18 +2905,13 @@ function initCardsPage() {
             }
         }
         if (busyThread <= 0) {
-            let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
-            if (curJump != 2) {
-                _w.top.jump = true;
-                logs.addLog('所有任务处理完毕，5秒后自动进入下一章', 'green');
-            } else {
-                logs.addLog('所有任务处理完毕，用户设置为不跳转，脚本已就绪', 'green');
-            }
+            notifyAllDoneOrJump(false);
         } else {
             setTimeout(loopjob, 500);
         }
     };
 
+    let readyCheckRetries = 0;
     const readyCheck = () => {
         setTimeout(function () {
             try {
@@ -2864,7 +2936,10 @@ function initCardsPage() {
                 _d.getElementById('autoSaveButton').setAttribute('class', ['btn btn-default btn-sm', 'btn btn-success btn-sm'][_w.top.unrivalAutoSave]);
             } catch (e) {
                 console.log(e);
-                readyCheck();
+                if (readyCheckRetries < 20) {
+                    readyCheckRetries++;
+                    readyCheck();
+                }
             }
         }, 500);
     };
@@ -2875,13 +2950,7 @@ function initCardsPage() {
     try {
         pageData = JSON.parse(param);
     } catch (e) {
-        let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
-        if (curJump != 2) {
-            _w.top.jump = true;
-            logs.addLog('此页无任务，5秒后自动进入下一章', 'green');
-        } else {
-            logs.addLog('此页无任务，用户设置为不跳转，脚本已就绪', 'green');
-        }
+        notifyAllDoneOrJump(true);
         return;
     }
 
@@ -2925,10 +2994,12 @@ function initCardsPage() {
                     let videoInfo = JSON.parse(res.responseText),
                         duration = videoInfo['duration'],
                         dtoken = videoInfo['dtoken'];
+                    const rawName = (item['property'] && item['property']['name']) || '未知视频';
+                    const safeName = escapeHtml(rawName);
                     if (duration === undefined) {
                         _d.getElementById('joblist').innerHTML += `
                         <div class="panel panel-default">
-                            <div class="panel-body">[无效视频] ${item['property']['name']}</div>
+                            <div class="panel-body">[无效视频] ${safeName}</div>
                         </div>`;
                         return;
                     }
@@ -2961,9 +3032,11 @@ function initCardsPage() {
                     }
                     _d.getElementById('joblist').innerHTML += `
                         <div class="panel panel-default">
-                            <div class="panel-body">${vDownloadLink}[视频] ${item['property']['name']}</div>
+                            <div class="panel-body">${vDownloadLink}[视频] ${safeName}</div>
                         </div>`;
-                } catch (e) { }
+                } catch (e) {
+                    logs.addLog('解析视频状态异常：' + (e.message || e), 'red');
+                }
             },
             onerror: function (err) {
                 busyThread -= 1;
@@ -2980,10 +3053,7 @@ function initCardsPage() {
         if (rate <= 0) {
             missionList['m' + item['jobid']]['running'] = true;
             logs.addLog('倍速不合法，视频已跳过', 'orange');
-            setTimeout(function () {
-                missionList['m' + item['jobid']]['running'] = false;
-                missionList['m' + item['jobid']]['done'] = true;
-            }, 5000);
+            markMissionDone(missionList, item['jobid'], 5000);
             return;
         }
         let videojs_id = String(parseInt(Math.random() * 9999999));
@@ -2992,7 +3062,7 @@ function initCardsPage() {
         logs.addLog('观看信息每60秒上报一次，请耐心等待', 'green');
 
         let curDisableMonitor = (_w.top && _w.top.unrivalDisableMonitor !== undefined) ? _w.top.unrivalDisableMonitor : disableMonitor;
-        if (curDisableMonitor) {
+        if (curDisableMonitor == 1) {
             logs.addLog('已开启解除多端学习监控', 'orange');
         }
 
@@ -3012,10 +3082,7 @@ function initCardsPage() {
                 if (rate <= 0) {
                     loop.stop();
                     logs.addLog('倍速不合法，视频已跳过', 'orange');
-                    setTimeout(function () {
-                        missionList['m' + item['jobid']]['running'] = false;
-                        missionList['m' + item['jobid']]['done'] = true;
-                    }, 5000);
+                    markMissionDone(missionList, item['jobid'], 5000);
                     return;
                 }
                 rt = isAudio ? '' : (missionList['m' + item['jobid']]['rt'] || '0.9');
@@ -3086,18 +3153,14 @@ function initCardsPage() {
                                 if (timelong[UID]['time'] / 60 > 22 && item['doublespeed'] === 0 && _w.top.unrivalReviewMode == '0') {
                                     loop.stop();
                                     logs.addLog('今日学习时间过长，已暂停，建议明日继续学习', 'red');
-                                    setTimeout(function () {
-                                        missionList['m' + item['jobid']]['running'] = false;
-                                        missionList['m' + item['jobid']]['done'] = true;
-                                    }, 5000);
+                                    markMissionDone(missionList, item['jobid'], 5000);
                                     return;
                                 }
                                 let ispass = JSON.parse(res.responseText);
                                 first = false;
                                 if (ispass['isPassed'] && _w.top.unrivalReviewMode == '0') {
                                     logs.addLog('视频任务已完成', 'green');
-                                    missionList['m' + item['jobid']]['running'] = false;
-                                    missionList['m' + item['jobid']]['done'] = true;
+                                    markMissionDone(missionList, item['jobid']);
                                     loop.stop();
                                     return;
                                 } else if (isdrag === '4') {
@@ -3106,8 +3169,7 @@ function initCardsPage() {
                                     } else {
                                         logs.addLog('视频已观看完毕，等待超星更新进度', 'orange');
                                     }
-                                    missionList['m' + item['jobid']]['running'] = false;
-                                    missionList['m' + item['jobid']]['done'] = true;
+                                    markMissionDone(missionList, item['jobid']);
                                     try {
                                         loop.stop();
                                     } catch (e) { }
@@ -3166,14 +3228,12 @@ function initCardsPage() {
                     } catch (e) {
                         logs.addLog('文档任务解析错误', 'red');
                     }
-                    missionList['m' + item['jobid']]['running'] = false;
-                    missionList['m' + item['jobid']]['done'] = true;
+                    markMissionDone(missionList, item['jobid']);
                 },
                 onerror: function (err) {
                     busyThread -= 1;
                     logs.addLog('文档任务请求错误', 'red');
-                    missionList['m' + item['jobid']]['running'] = false;
-                    missionList['m' + item['jobid']]['done'] = true;
+                    markMissionDone(missionList, item['jobid']);
                 }
             });
         }, parseInt(Math.random() * 2000 + 4000, 10));
@@ -3198,12 +3258,17 @@ function initCardsPage() {
         _d.getElementById('frame_content').src = _p + '//' + _h + '/work/phone/work?workId=' + item['jobid']
             .replace('work-', '') + '&courseId=' + courseId + '&clazzId=' + classIdFromData + '&knowledgeId=' +
             chapterId + '&jobId=' + item['jobid'] + '&enc=' + item['enc'];
+        _w.top.unrivalWorkLogs = [];
         _w.top.unrivalWorkInfo = '';
         _w.top.unrivalDoneWorkId = '';
 
         let lastResultsLen = 0;
         let workInfoTimer = setInterval(function () {
-            if (_w.top.unrivalWorkInfo != '') {
+            const workMsgs = typeof drainWorkLogs === 'function' ? drainWorkLogs() : [];
+            for (const m of workMsgs) {
+                logs.addLog(m);
+            }
+            if (typeof drainWorkLogs !== 'function' && _w.top.unrivalWorkInfo != '') {
                 logs.addLog(_w.top.unrivalWorkInfo);
                 _w.top.unrivalWorkInfo = '';
             }
@@ -3244,22 +3309,13 @@ function initCardsPage() {
                 }
                 _d.getElementById('workPanel').style.display = 'none';
                 _d.getElementById('frame_content').src = '';
-                setTimeout(function () {
-                    missionList['m' + item['jobid']]['running'] = false;
-                    missionList['m' + item['jobid']]['done'] = true;
-                }, 5000);
+                markMissionDone(missionList, item['jobid'], 5000);
             }
         }, 500);
     };
 
     if (jobList.length <= 0) {
-        let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
-        if (curJump != 2) {
-            _w.top.jump = true;
-            logs.addLog('此页无任务，5秒后自动进入下一章', 'green');
-        } else {
-            logs.addLog('此页无任务，用户设置为不跳转，脚本已就绪', 'green');
-        }
+        notifyAllDoneOrJump(true);
         return;
     }
 
@@ -3270,10 +3326,11 @@ function initCardsPage() {
         } else if (item['type'] === 'document') {
             const dObjId = (item['property'] && item['property']['objectid']) || item['objectid'] || '';
             const dUrl = dObjId ? `https://d0.ananas.chaoxing.com/download/${dObjId}` : '';
-            const dName = (item['property'] && item['property']['name']) || 'document';
+            const rawDocName = (item['property'] && item['property']['name']) || 'document';
+            const safeDocName = escapeHtml(rawDocName);
             const dDownloadLink = dUrl ? `
                 <span style="float:right;font-size:12px;">
-                    <a href="javascript:void(0);" class="unrival-download-btn" data-url="${encodeURIComponent(dUrl)}" data-name="${encodeURIComponent(dName)}" style="color:#337ab7;font-weight:600;text-decoration:none;margin-right:8px;" title="使用油猴直接下载到本地">下载</a>
+                    <a href="javascript:void(0);" class="unrival-download-btn" data-url="${encodeURIComponent(dUrl)}" data-name="${encodeURIComponent(rawDocName)}" style="color:#337ab7;font-weight:600;text-decoration:none;margin-right:8px;" title="使用油猴直接下载到本地">下载</a>
                     <a href="${dUrl}" target="_blank" rel="noopener" referrerpolicy="no-referrer-when-downgrade" style="color:#8a6d3b;text-decoration:none;margin-right:8px;" title="在新标签页打开预览">预览</a>
                     <a href="javascript:void(0);" class="unrival-copy-link" data-url="${encodeURIComponent(dUrl)}" style="color:#5cb85c;text-decoration:none;" title="复制直链至 IDM/下载器">复制直链</a>
                 </span>` : '';
@@ -3287,28 +3344,31 @@ function initCardsPage() {
             };
             _d.getElementById('joblist').innerHTML += `
                 <div class="panel panel-default">
-                    <div class="panel-body">${dDownloadLink}[文档] ${item['property']['name']}</div>
+                    <div class="panel-body">${dDownloadLink}[文档] ${safeDocName}</div>
                 </div>`;
         } else if (item['type'] === 'workid' && _w.top.unrivalDoWork == '1') {
+            const rawTitle = (item['property'] && (item['property']['title'] || item['property']['name'])) || '章节测试';
+            const safeTitle = escapeHtml(rawTitle);
             missionList['m' + item['jobid']] = {
                 'type': 'work',
                 'workid': item['property']['workid'],
                 'jobid': item['jobid'],
-                'name': item['property']['title'] || item['property']['name'] || '章节测试',
+                'name': rawTitle,
                 'enc': item['enc'],
                 'done': false,
                 'running': false
             };
             _d.getElementById('joblist').innerHTML += `
                 <div class="panel panel-default">
-                    <div class="panel-body">[测试] ${item['property']['title']}</div>
+                    <div class="panel-body">[测试] ${safeTitle}</div>
                 </div>`;
         } else {
             try {
-                let jobName = item['property']['name'] || item['property']['title'] || '未知任务';
+                let rawJobName = (item['property'] && (item['property']['name'] || item['property']['title'])) || '未知任务';
+                let safeJobName = escapeHtml(rawJobName);
                 _d.getElementById('joblist').innerHTML += `
                     <div class="panel panel-default">
-                        <div class="panel-body">已跳过：${jobName}</div>
+                        <div class="panel-body">已跳过：${safeJobName}</div>
                     </div>`;
             } catch (e) { }
         }
@@ -3659,7 +3719,7 @@ function initHomeWorkPage() {
 
             if (currentAccuracy >= curAccuracy && _w.top.unrivalAutoSubmit == '1') {
                 _w.top.unrivalDoneWorkId = getQueryVariable('workId');
-                _w.top.unrivalWorkInfo = '正确率符合标准 (' + currentAccuracy + '% >= ' + curAccuracy + '%)，已提交测试';
+                pushWorkLog('正确率符合标准 (' + currentAccuracy + '% >= ' + curAccuracy + '%)，已提交测试');
                 setTimeout(function () {
                     if (typeof _w.submitCheckTimes === 'function') _w.submitCheckTimes();
                     else if (typeof submitCheckTimes === 'function') submitCheckTimes();
@@ -3673,12 +3733,12 @@ function initHomeWorkPage() {
                     // 60秒仅做日志提示，不强行清空 iframe 或擅自改动状态
                     setTimeout(function () {
                         if (!_w.top.unrivalWorkDone) {
-                            _w.top.unrivalWorkInfo = '提示：测验提交操作已等待超过60秒，如页面未自动跳转请手动确认。';
+                            pushWorkLog('提示：测验提交操作已等待超过60秒，如页面未自动跳转请手动确认。');
                         }
                     }, 60000);
                 }, parseInt(Math.random() * 2000 + 3000, 10));
             } else if (_w.top.unrivalAutoSave == '1') {
-                _w.top.unrivalWorkInfo = '正确率(' + currentAccuracy + '%)未达提交标准或未开启自动提交，已自动保存答案';
+                pushWorkLog('正确率(' + currentAccuracy + '%)未达提交标准或未开启自动提交，已自动保存答案');
                 setTimeout(function () {
                     _w.top.unrivalDoneWorkId = getQueryVariable('workId');
                     if (typeof _w.noSubmit === 'function') {
@@ -3688,12 +3748,12 @@ function initHomeWorkPage() {
                     }
                     setTimeout(function () {
                         if (!_w.top.unrivalWorkDone) {
-                            _w.top.unrivalWorkInfo = '提示：测验保存操作已等待超过60秒，如未提示保存成功请手动确认。';
+                            pushWorkLog('提示：测验保存操作已等待超过60秒，如未提示保存成功请手动确认。');
                         }
                     }, 60000);
                 }, 2000);
             } else {
-                _w.top.unrivalWorkInfo = '当前正确率：' + currentAccuracy + '%，用户设置为不自动保存，请手动处理作业';
+                pushWorkLog('当前正确率：' + currentAccuracy + '%，用户设置为不自动保存，请手动处理作业');
             }
         }, 1000);
     });

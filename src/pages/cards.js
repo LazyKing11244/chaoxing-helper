@@ -2,6 +2,63 @@
 // 路由模块: knowledge/cards (任务调度、视频/音频/文档/测验 iframe 控制)
 // ==========================================
 
+function fallbackOpenUrl(url) {
+    try {
+        const tempA = _d.createElement('a');
+        tempA.href = url;
+        tempA.target = '_blank';
+        tempA.rel = 'noopener';
+        tempA.referrerPolicy = 'no-referrer-when-downgrade';
+        _d.body.appendChild(tempA);
+        tempA.click();
+        _d.body.removeChild(tempA);
+    } catch (e) {
+        window.open(url, '_blank');
+    }
+}
+
+function extractMArgParam(doc) {
+    const scripts = (doc || _d).getElementsByTagName('script');
+    for (let i = 0, l = scripts.length; i < l; i++) {
+        const text = scripts[i].innerHTML;
+        if (text.indexOf('mArg = "";') !== -1 && text.indexOf('==UserScript==') === -1) {
+            const start = 'try{\n    mArg = ';
+            const end = ';\n}catch(e){';
+            const sIdx = text.indexOf(start);
+            const eIdx = text.indexOf(end);
+            if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
+                return text.substring(sIdx + start.length, eIdx);
+            }
+        }
+    }
+    return null;
+}
+
+function notifyAllDoneOrJump(emptyPage = false) {
+    let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
+    const desc = emptyPage ? '此页无任务' : '所有任务处理完毕';
+    if (curJump != 2) {
+        _w.top.jump = true;
+        logs.addLog(desc + '，5秒后自动进入下一章', 'green');
+    } else {
+        logs.addLog(desc + '，用户设置为不跳转，脚本已就绪', 'green');
+    }
+}
+
+function markMissionDone(missionList, jobid, delayMs = 0) {
+    const applyDone = () => {
+        if (missionList && missionList['m' + jobid]) {
+            missionList['m' + jobid]['running'] = false;
+            missionList['m' + jobid]['done'] = true;
+        }
+    };
+    if (delayMs > 0) {
+        setTimeout(applyDone, delayMs);
+    } else {
+        applyDone();
+    }
+}
+
 function initCardsPage() {
     let spans = _d.getElementsByTagName('span');
     for (let i = 0, l = spans.length; i < l; i++) {
@@ -18,17 +75,7 @@ function initCardsPage() {
     _w.top.unrivalPageRd = String(Math.random());
 
     let busyThread = 0;
-    const getStr = (str, start, end) => {
-        let res = str.substring(str.indexOf(start), str.indexOf(end)).replace(start, '');
-        return res;
-    };
-    const scripts = _d.getElementsByTagName('script');
-    let param = null;
-    for (let i = 0, l = scripts.length; i < l; i++) {
-        if (scripts[i].innerHTML.indexOf('mArg = "";') !== -1 && scripts[i].innerHTML.indexOf('==UserScript==') === -1) {
-            param = getStr(scripts[i].innerHTML, 'try{\n    mArg = ', ';\n}catch(e){');
-        }
-    }
+    const param = extractMArgParam(_d);
     if (param === null) return;
 
     let vrefer;
@@ -42,21 +89,6 @@ function initCardsPage() {
 
     _d.getElementsByTagName("html")[0].innerHTML = CARDS_PANEL_HTML;
     bindPanelEvents();
-
-    const fallbackOpenUrl = (url) => {
-        try {
-            const tempA = _d.createElement('a');
-            tempA.href = url;
-            tempA.target = '_blank';
-            tempA.rel = 'noopener';
-            tempA.referrerPolicy = 'no-referrer-when-downgrade';
-            _d.body.appendChild(tempA);
-            tempA.click();
-            _d.body.removeChild(tempA);
-        } catch (e) {
-            window.open(url, '_blank');
-        }
-    };
 
     const downloadMedia = (url, name) => {
         if (!url) {
@@ -170,18 +202,13 @@ function initCardsPage() {
             }
         }
         if (busyThread <= 0) {
-            let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
-            if (curJump != 2) {
-                _w.top.jump = true;
-                logs.addLog('所有任务处理完毕，5秒后自动进入下一章', 'green');
-            } else {
-                logs.addLog('所有任务处理完毕，用户设置为不跳转，脚本已就绪', 'green');
-            }
+            notifyAllDoneOrJump(false);
         } else {
             setTimeout(loopjob, 500);
         }
     };
 
+    let readyCheckRetries = 0;
     const readyCheck = () => {
         setTimeout(function () {
             try {
@@ -206,7 +233,10 @@ function initCardsPage() {
                 _d.getElementById('autoSaveButton').setAttribute('class', ['btn btn-default btn-sm', 'btn btn-success btn-sm'][_w.top.unrivalAutoSave]);
             } catch (e) {
                 console.log(e);
-                readyCheck();
+                if (readyCheckRetries < 20) {
+                    readyCheckRetries++;
+                    readyCheck();
+                }
             }
         }, 500);
     };
@@ -217,13 +247,7 @@ function initCardsPage() {
     try {
         pageData = JSON.parse(param);
     } catch (e) {
-        let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
-        if (curJump != 2) {
-            _w.top.jump = true;
-            logs.addLog('此页无任务，5秒后自动进入下一章', 'green');
-        } else {
-            logs.addLog('此页无任务，用户设置为不跳转，脚本已就绪', 'green');
-        }
+        notifyAllDoneOrJump(true);
         return;
     }
 
@@ -267,10 +291,12 @@ function initCardsPage() {
                     let videoInfo = JSON.parse(res.responseText),
                         duration = videoInfo['duration'],
                         dtoken = videoInfo['dtoken'];
+                    const rawName = (item['property'] && item['property']['name']) || '未知视频';
+                    const safeName = escapeHtml(rawName);
                     if (duration === undefined) {
                         _d.getElementById('joblist').innerHTML += `
                         <div class="panel panel-default">
-                            <div class="panel-body">[无效视频] ${item['property']['name']}</div>
+                            <div class="panel-body">[无效视频] ${safeName}</div>
                         </div>`;
                         return;
                     }
@@ -303,9 +329,11 @@ function initCardsPage() {
                     }
                     _d.getElementById('joblist').innerHTML += `
                         <div class="panel panel-default">
-                            <div class="panel-body">${vDownloadLink}[视频] ${item['property']['name']}</div>
+                            <div class="panel-body">${vDownloadLink}[视频] ${safeName}</div>
                         </div>`;
-                } catch (e) { }
+                } catch (e) {
+                    logs.addLog('解析视频状态异常：' + (e.message || e), 'red');
+                }
             },
             onerror: function (err) {
                 busyThread -= 1;
@@ -322,10 +350,7 @@ function initCardsPage() {
         if (rate <= 0) {
             missionList['m' + item['jobid']]['running'] = true;
             logs.addLog('倍速不合法，视频已跳过', 'orange');
-            setTimeout(function () {
-                missionList['m' + item['jobid']]['running'] = false;
-                missionList['m' + item['jobid']]['done'] = true;
-            }, 5000);
+            markMissionDone(missionList, item['jobid'], 5000);
             return;
         }
         let videojs_id = String(parseInt(Math.random() * 9999999));
@@ -334,7 +359,7 @@ function initCardsPage() {
         logs.addLog('观看信息每60秒上报一次，请耐心等待', 'green');
 
         let curDisableMonitor = (_w.top && _w.top.unrivalDisableMonitor !== undefined) ? _w.top.unrivalDisableMonitor : disableMonitor;
-        if (curDisableMonitor) {
+        if (curDisableMonitor == 1) {
             logs.addLog('已开启解除多端学习监控', 'orange');
         }
 
@@ -354,10 +379,7 @@ function initCardsPage() {
                 if (rate <= 0) {
                     loop.stop();
                     logs.addLog('倍速不合法，视频已跳过', 'orange');
-                    setTimeout(function () {
-                        missionList['m' + item['jobid']]['running'] = false;
-                        missionList['m' + item['jobid']]['done'] = true;
-                    }, 5000);
+                    markMissionDone(missionList, item['jobid'], 5000);
                     return;
                 }
                 rt = isAudio ? '' : (missionList['m' + item['jobid']]['rt'] || '0.9');
@@ -428,18 +450,14 @@ function initCardsPage() {
                                 if (timelong[UID]['time'] / 60 > 22 && item['doublespeed'] === 0 && _w.top.unrivalReviewMode == '0') {
                                     loop.stop();
                                     logs.addLog('今日学习时间过长，已暂停，建议明日继续学习', 'red');
-                                    setTimeout(function () {
-                                        missionList['m' + item['jobid']]['running'] = false;
-                                        missionList['m' + item['jobid']]['done'] = true;
-                                    }, 5000);
+                                    markMissionDone(missionList, item['jobid'], 5000);
                                     return;
                                 }
                                 let ispass = JSON.parse(res.responseText);
                                 first = false;
                                 if (ispass['isPassed'] && _w.top.unrivalReviewMode == '0') {
                                     logs.addLog('视频任务已完成', 'green');
-                                    missionList['m' + item['jobid']]['running'] = false;
-                                    missionList['m' + item['jobid']]['done'] = true;
+                                    markMissionDone(missionList, item['jobid']);
                                     loop.stop();
                                     return;
                                 } else if (isdrag === '4') {
@@ -448,8 +466,7 @@ function initCardsPage() {
                                     } else {
                                         logs.addLog('视频已观看完毕，等待超星更新进度', 'orange');
                                     }
-                                    missionList['m' + item['jobid']]['running'] = false;
-                                    missionList['m' + item['jobid']]['done'] = true;
+                                    markMissionDone(missionList, item['jobid']);
                                     try {
                                         loop.stop();
                                     } catch (e) { }
@@ -508,14 +525,12 @@ function initCardsPage() {
                     } catch (e) {
                         logs.addLog('文档任务解析错误', 'red');
                     }
-                    missionList['m' + item['jobid']]['running'] = false;
-                    missionList['m' + item['jobid']]['done'] = true;
+                    markMissionDone(missionList, item['jobid']);
                 },
                 onerror: function (err) {
                     busyThread -= 1;
                     logs.addLog('文档任务请求错误', 'red');
-                    missionList['m' + item['jobid']]['running'] = false;
-                    missionList['m' + item['jobid']]['done'] = true;
+                    markMissionDone(missionList, item['jobid']);
                 }
             });
         }, parseInt(Math.random() * 2000 + 4000, 10));
@@ -540,12 +555,17 @@ function initCardsPage() {
         _d.getElementById('frame_content').src = _p + '//' + _h + '/work/phone/work?workId=' + item['jobid']
             .replace('work-', '') + '&courseId=' + courseId + '&clazzId=' + classIdFromData + '&knowledgeId=' +
             chapterId + '&jobId=' + item['jobid'] + '&enc=' + item['enc'];
+        _w.top.unrivalWorkLogs = [];
         _w.top.unrivalWorkInfo = '';
         _w.top.unrivalDoneWorkId = '';
 
         let lastResultsLen = 0;
         let workInfoTimer = setInterval(function () {
-            if (_w.top.unrivalWorkInfo != '') {
+            const workMsgs = typeof drainWorkLogs === 'function' ? drainWorkLogs() : [];
+            for (const m of workMsgs) {
+                logs.addLog(m);
+            }
+            if (typeof drainWorkLogs !== 'function' && _w.top.unrivalWorkInfo != '') {
                 logs.addLog(_w.top.unrivalWorkInfo);
                 _w.top.unrivalWorkInfo = '';
             }
@@ -586,22 +606,13 @@ function initCardsPage() {
                 }
                 _d.getElementById('workPanel').style.display = 'none';
                 _d.getElementById('frame_content').src = '';
-                setTimeout(function () {
-                    missionList['m' + item['jobid']]['running'] = false;
-                    missionList['m' + item['jobid']]['done'] = true;
-                }, 5000);
+                markMissionDone(missionList, item['jobid'], 5000);
             }
         }, 500);
     };
 
     if (jobList.length <= 0) {
-        let curJump = (_w.top && _w.top.unrivalJumpType !== undefined) ? _w.top.unrivalJumpType : jumpType;
-        if (curJump != 2) {
-            _w.top.jump = true;
-            logs.addLog('此页无任务，5秒后自动进入下一章', 'green');
-        } else {
-            logs.addLog('此页无任务，用户设置为不跳转，脚本已就绪', 'green');
-        }
+        notifyAllDoneOrJump(true);
         return;
     }
 
@@ -612,10 +623,11 @@ function initCardsPage() {
         } else if (item['type'] === 'document') {
             const dObjId = (item['property'] && item['property']['objectid']) || item['objectid'] || '';
             const dUrl = dObjId ? `https://d0.ananas.chaoxing.com/download/${dObjId}` : '';
-            const dName = (item['property'] && item['property']['name']) || 'document';
+            const rawDocName = (item['property'] && item['property']['name']) || 'document';
+            const safeDocName = escapeHtml(rawDocName);
             const dDownloadLink = dUrl ? `
                 <span style="float:right;font-size:12px;">
-                    <a href="javascript:void(0);" class="unrival-download-btn" data-url="${encodeURIComponent(dUrl)}" data-name="${encodeURIComponent(dName)}" style="color:#337ab7;font-weight:600;text-decoration:none;margin-right:8px;" title="使用油猴直接下载到本地">下载</a>
+                    <a href="javascript:void(0);" class="unrival-download-btn" data-url="${encodeURIComponent(dUrl)}" data-name="${encodeURIComponent(rawDocName)}" style="color:#337ab7;font-weight:600;text-decoration:none;margin-right:8px;" title="使用油猴直接下载到本地">下载</a>
                     <a href="${dUrl}" target="_blank" rel="noopener" referrerpolicy="no-referrer-when-downgrade" style="color:#8a6d3b;text-decoration:none;margin-right:8px;" title="在新标签页打开预览">预览</a>
                     <a href="javascript:void(0);" class="unrival-copy-link" data-url="${encodeURIComponent(dUrl)}" style="color:#5cb85c;text-decoration:none;" title="复制直链至 IDM/下载器">复制直链</a>
                 </span>` : '';
@@ -629,28 +641,31 @@ function initCardsPage() {
             };
             _d.getElementById('joblist').innerHTML += `
                 <div class="panel panel-default">
-                    <div class="panel-body">${dDownloadLink}[文档] ${item['property']['name']}</div>
+                    <div class="panel-body">${dDownloadLink}[文档] ${safeDocName}</div>
                 </div>`;
         } else if (item['type'] === 'workid' && _w.top.unrivalDoWork == '1') {
+            const rawTitle = (item['property'] && (item['property']['title'] || item['property']['name'])) || '章节测试';
+            const safeTitle = escapeHtml(rawTitle);
             missionList['m' + item['jobid']] = {
                 'type': 'work',
                 'workid': item['property']['workid'],
                 'jobid': item['jobid'],
-                'name': item['property']['title'] || item['property']['name'] || '章节测试',
+                'name': rawTitle,
                 'enc': item['enc'],
                 'done': false,
                 'running': false
             };
             _d.getElementById('joblist').innerHTML += `
                 <div class="panel panel-default">
-                    <div class="panel-body">[测试] ${item['property']['title']}</div>
+                    <div class="panel-body">[测试] ${safeTitle}</div>
                 </div>`;
         } else {
             try {
-                let jobName = item['property']['name'] || item['property']['title'] || '未知任务';
+                let rawJobName = (item['property'] && (item['property']['name'] || item['property']['title'])) || '未知任务';
+                let safeJobName = escapeHtml(rawJobName);
                 _d.getElementById('joblist').innerHTML += `
                     <div class="panel panel-default">
-                        <div class="panel-body">已跳过：${jobName}</div>
+                        <div class="panel-body">已跳过：${safeJobName}</div>
                     </div>`;
             } catch (e) { }
         }

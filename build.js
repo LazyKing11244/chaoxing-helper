@@ -17,6 +17,7 @@ const MODULES = [
     'core/env.js',
     'core/config.js',
     'core/logger.js',
+    'ui/template.js',
     'ui/panel.js',
     'tiku/search.js',
     'matcher/index.js',

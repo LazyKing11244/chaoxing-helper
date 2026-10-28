@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         超星学习通助手 Next
 // @namespace    unrival
-// @version      5.1.2
+// @version      5.1.3
 // @homepageURL  https://github.com/SlackHan/chaoxing-helper
 // @supportURL   https://github.com/SlackHan/chaoxing-helper/issues
 // @updateURL    https://raw.githubusercontent.com/SlackHan/chaoxing-helper/main/chaoxing-helper.user.js

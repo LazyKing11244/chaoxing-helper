@@ -75,7 +75,7 @@ function initHomeWorkPage() {
 
             if (currentAccuracy >= curAccuracy && _w.top.unrivalAutoSubmit == '1') {
                 _w.top.unrivalDoneWorkId = getQueryVariable('workId');
-                _w.top.unrivalWorkInfo = '正确率符合标准 (' + currentAccuracy + '% >= ' + curAccuracy + '%)，已提交测试';
+                pushWorkLog('正确率符合标准 (' + currentAccuracy + '% >= ' + curAccuracy + '%)，已提交测试');
                 setTimeout(function () {
                     if (typeof _w.submitCheckTimes === 'function') _w.submitCheckTimes();
                     else if (typeof submitCheckTimes === 'function') submitCheckTimes();
@@ -89,12 +89,12 @@ function initHomeWorkPage() {
                     // 60秒仅做日志提示，不强行清空 iframe 或擅自改动状态
                     setTimeout(function () {
                         if (!_w.top.unrivalWorkDone) {
-                            _w.top.unrivalWorkInfo = '提示：测验提交操作已等待超过60秒，如页面未自动跳转请手动确认。';
+                            pushWorkLog('提示：测验提交操作已等待超过60秒，如页面未自动跳转请手动确认。');
                         }
                     }, 60000);
                 }, parseInt(Math.random() * 2000 + 3000, 10));
             } else if (_w.top.unrivalAutoSave == '1') {
-                _w.top.unrivalWorkInfo = '正确率(' + currentAccuracy + '%)未达提交标准或未开启自动提交，已自动保存答案';
+                pushWorkLog('正确率(' + currentAccuracy + '%)未达提交标准或未开启自动提交，已自动保存答案');
                 setTimeout(function () {
                     _w.top.unrivalDoneWorkId = getQueryVariable('workId');
                     if (typeof _w.noSubmit === 'function') {
@@ -104,12 +104,12 @@ function initHomeWorkPage() {
                     }
                     setTimeout(function () {
                         if (!_w.top.unrivalWorkDone) {
-                            _w.top.unrivalWorkInfo = '提示：测验保存操作已等待超过60秒，如未提示保存成功请手动确认。';
+                            pushWorkLog('提示：测验保存操作已等待超过60秒，如未提示保存成功请手动确认。');
                         }
                     }, 60000);
                 }, 2000);
             } else {
-                _w.top.unrivalWorkInfo = '当前正确率：' + currentAccuracy + '%，用户设置为不自动保存，请手动处理作业';
+                pushWorkLog('当前正确率：' + currentAccuracy + '%，用户设置为不自动保存，请手动处理作业');
             }
         }, 1000);
     });

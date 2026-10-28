@@ -7,7 +7,7 @@
 ## 1. 核心铁律
 
 1. **禁止直接修改产物**：严禁直接编辑 `chaoxing-helper.user.js`！所有业务修改必须在 [`src/`](file:///D:/lanhanCODE/projects/chaoxing-helper/src/) 各独立模块中完成。
-2. **改动必自检**：每次修改后必须运行 `node build.js`，确保打包无报错并通过语法检查。
+2. **改动必自检**：每次修改后必须运行 `node build.js` 打包，并执行 `npm test`（即 `node --test tests/unit.test.js`），确保打包成功、语法检查通过且 18 项单测 100% 通过。
 3. **架构与避坑手册**：开发前请先阅读交付维护手册 [`D:\lanhanDOC\01_Agent交付文档\docs\超星学习通助手_技术架构与交付维护手册.md`](file:///D:/lanhanDOC/01_Agent交付文档/docs/超星学习通助手_技术架构与交付维护手册.md)。
 
 ---
@@ -18,6 +18,7 @@
 - **视频与音频协议**：走纯本地 `localMd5`；音频任务必须 `rt = ''`。
 - **全角转半角**：清洗必须前置 `toCDB`，字体解密统一调用 `decryptFontIfNeeded`。
 - **挂机状态跨章**：持久化读写 `unrivalbacknow`。
+- **跨 iframe 测验日志**：统一调用 `pushWorkLog(msg)` 推入 `_w.top.unrivalWorkLogs` 队列，由外层卡片页 `drainWorkLogs()` 批量消费，严禁直接给 `_w.top.unrivalWorkInfo` 赋单字符串（杜绝同帧盲猜覆盖原始查题答案）。
 
 ---
 

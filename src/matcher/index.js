@@ -48,9 +48,7 @@ function parseQuestionsFromDom() {
 
         // 支持 0:单选, 1:多选, 2:填空, 3:判断
         if (['0', '1', '2', '3'].indexOf(typeN) < 0) {
-            if (_w.top && _w.top.unrivalWorkInfo !== undefined) {
-                _w.top.unrivalWorkInfo = '遇到暂不支持的题型(题型代码:' + typeN + ')，已跳过';
-            }
+            pushWorkLog('遇到暂不支持的题型(题型代码:' + typeN + ')，已跳过');
             continue;
         }
 
@@ -107,6 +105,36 @@ function applyQuestionAnswer(res, quu, contextObj) {
     const ctResult = res || { 'code': -1, 'data': '未找到答案' };
     let isMatched = false;
 
+    function clickOptionByLetter(letter) {
+        if (!letter) return false;
+        const targetLtr = String(letter).trim().toUpperCase();
+        for (let y = 0, j = choiceEs.length; y < j; y++) {
+            const em = choiceEs[y].getElementsByTagName('em');
+            if (em.length < 1) continue;
+            const emLetter = (em[0].getAttribute('id-param') || em[0].innerText || '').trim();
+            if (emLetter.toUpperCase() === targetLtr && choiceEs[y].getAttribute('id-param') === cleanQId) {
+                const cls = choiceEs[y].getAttribute('class') || '';
+                if (!cls.includes('cur')) {
+                    choiceEs[y].click();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function clickJudgeOption(valStr, requireEm = false) {
+        const targetVal = String(valStr);
+        for (let u = 0, k = choiceEs.length; u < k; u++) {
+            if (requireEm && choiceEs[u].getElementsByTagName('em').length < 1) continue;
+            if (choiceEs[u].getAttribute('val-param') === targetVal && choiceEs[u].getAttribute('id-param') === cleanQId) {
+                choiceEs[u].click();
+                return true;
+            }
+        }
+        return false;
+    }
+
     const handleAnswerMatched = () => {
         isMatched = true;
         if (typeof onAnswerMatched === 'function') {
@@ -131,39 +159,33 @@ function applyQuestionAnswer(res, quu, contextObj) {
 
     try {
         if (ctResult['code'] !== 1) {
-            _w.top.unrivalWorkInfo = '题目：' + quu['question'] + '：未搜索到答案';
+            pushWorkLog('题目：' + quu['question'] + '：未搜索到答案');
 
             // 未命中答案时的盲猜机制（当允许盲猜且合格正确率不为100%时）
             if (curRandomDo == 1 && curAccuracy < 100) {
                 if (quu['type'] === '判断题') {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未找到答案，自动选【错】';
-                    for (let u = 0, k = choiceEs.length; u < k; u++) {
-                        if (choiceEs[u].getElementsByTagName('em').length < 1) continue;
-                        if (choiceEs[u].getAttribute('val-param') === 'false' && choiceEs[u].getAttribute('id-param') === cleanQId) {
-                            choiceEs[u].click();
-                            return;
-                        }
-                    }
+                    pushWorkLog(quu['question'] + '：未找到答案，自动选【错】');
+                    if (clickJudgeOption('false', true)) return;
                 } else if (quu['type'] === '单选题') {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未找到答案，自动选【B】';
-                    for (let y = 0, j = choiceEs.length; y < j; y++) {
-                        const em = choiceEs[y].getElementsByTagName('em');
-                        if (em.length < 1) continue;
-                        const emLetter = (em[0].getAttribute('id-param') || em[0].innerText || '').trim();
-                        if (emLetter === 'B' && choiceEs[y].getAttribute('id-param') === cleanQId) {
-                            if (!choiceEs[y].getAttribute('class').includes('cur')) {
-                                choiceEs[y].click();
-                            }
-                            return;
+                    pushWorkLog(quu['question'] + '：未找到答案，自动选【B】');
+                    if (clickOptionByLetter('B')) return;
+                } else if (quu['type'] === '多选题') {
+                    pushWorkLog(quu['question'] + '：未找到答案，自动全选');
+                    let clicked = false;
+                    for (let option in quu['options']) {
+                        if (option === 'length') continue;
+                        if (clickOptionByLetter(quu['options'][option]['value'])) {
+                            clicked = true;
                         }
                     }
-                } else if (quu['type'] === '多选题') {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未找到答案，自动全选';
-                    for (let y = 0, j = choiceEs.length; y < j; y++) {
-                        if (choiceEs[y].getElementsByTagName('em').length < 1) continue;
-                        if (choiceEs[y].getAttribute('id-param') === cleanQId) {
-                            if (!choiceEs[y].getAttribute('class').includes('cur')) {
-                                choiceEs[y].click();
+                    if (!clicked) {
+                        for (let y = 0, j = choiceEs.length; y < j; y++) {
+                            if (choiceEs[y].getElementsByTagName('em').length < 1) continue;
+                            if (choiceEs[y].getAttribute('id-param') === cleanQId) {
+                                const cls = choiceEs[y].getAttribute('class') || '';
+                                if (!cls.includes('cur')) {
+                                    choiceEs[y].click();
+                                }
                             }
                         }
                     }
@@ -173,7 +195,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
         }
 
         const result = ctResult['data'];
-        _w.top.unrivalWorkInfo = (ctResult['from'] ? '[' + ctResult['from'] + '] ' : '') + '题目：' + quu['question'] + '：' + (typeof result === 'object' ? JSON.stringify(result) : result);
+        pushWorkLog((ctResult['from'] ? '[' + ctResult['from'] + '] ' : '') + '题目：' + quu['question'] + '：' + (typeof result === 'object' ? JSON.stringify(result) : result));
 
         switch (quu['type']) {
             case '判断题': {
@@ -188,12 +210,9 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 }
 
                 if (answer) {
-                    for (let u = 0, k = choiceEs.length; u < k; u++) {
-                        if (choiceEs[u].getAttribute('val-param') === answer && choiceEs[u].getAttribute('id-param') === cleanQId) {
-                            choiceEs[u].click();
-                            handleAnswerMatched();
-                            return;
-                        }
+                    if (clickJudgeOption(answer)) {
+                        handleAnswerMatched();
+                        return;
                     }
                 }
 
@@ -201,47 +220,20 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 const letterMatch = s.match(/^([A-Ba-b])(?:\.|\、|\:|\s|$)/);
                 if (letterMatch) {
                     const targetLtr = letterMatch[1].toUpperCase();
-                    for (let u = 0, k = choiceEs.length; u < k; u++) {
-                        const em = choiceEs[u].getElementsByTagName('em');
-                        if (em.length < 1) continue;
-                        const emLtr = (em[0].getAttribute('id-param') || em[0].innerText || '').trim().toUpperCase();
-                        if (emLtr === targetLtr && choiceEs[u].getAttribute('id-param') === cleanQId) {
-                            choiceEs[u].click();
-                            handleAnswerMatched();
-                            return;
-                        }
+                    if (clickOptionByLetter(targetLtr)) {
+                        handleAnswerMatched();
+                        return;
                     }
                 }
 
                 if (curRandomDo == 1 && curAccuracy < 100) {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到判断结果，自动选【错】';
-                    for (let u = 0, k = choiceEs.length; u < k; u++) {
-                        if (choiceEs[u].getElementsByTagName('em').length < 1) continue;
-                        if (choiceEs[u].getAttribute('val-param') === 'false' && choiceEs[u].getAttribute('id-param') === cleanQId) {
-                            choiceEs[u].click();
-                            return;
-                        }
-                    }
+                    pushWorkLog(quu['question'] + '：未匹配到判断结果，自动选【错】');
+                    if (clickJudgeOption('false', true)) return;
                 }
                 break;
             }
 
             case '单选题': {
-                function clickOptionByLetter(letter) {
-                    for (let y = 0, j = choiceEs.length; y < j; y++) {
-                        const em = choiceEs[y].getElementsByTagName('em');
-                        if (em.length < 1) continue;
-                        const emLetter = (em[0].getAttribute('id-param') || em[0].innerText || '').trim();
-                        if (emLetter.toUpperCase() === letter.toUpperCase() && choiceEs[y].getAttribute('id-param') === cleanQId) {
-                            if (!choiceEs[y].getAttribute('class').includes('cur')) {
-                                choiceEs[y].click();
-                            }
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-
                 const cleanRes = String(result).trim();
                 const s = cleanRes.replace(/^(?:答案|正确答案|选项)[:：\s]*/i, '').replace(/[*_`【】\(\)\[\]"']/g, '').trim();
 
@@ -282,28 +274,13 @@ function applyQuestionAnswer(res, quu, contextObj) {
 
                 // 4. 盲猜
                 if (curRandomDo == 1 && curAccuracy < 100) {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到正确答案，自动选【B】';
+                    pushWorkLog(quu['question'] + '：未匹配到正确答案，自动选【B】');
                     clickOptionByLetter('B');
                 }
                 break;
             }
 
             case '多选题': {
-                function clickOptionByLetter(letter) {
-                    for (let y = 0, j = choiceEs.length; y < j; y++) {
-                        const em = choiceEs[y].getElementsByTagName('em');
-                        if (em.length < 1) continue;
-                        const emLetter = (em[0].getAttribute('id-param') || em[0].innerText || '').trim();
-                        if (emLetter.toUpperCase() === letter.toUpperCase() && choiceEs[y].getAttribute('id-param') === cleanQId) {
-                            if (!choiceEs[y].getAttribute('class').includes('cur')) {
-                                choiceEs[y].click();
-                            }
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-
                 const matchedLetters = new Set();
                 if (Array.isArray(result)) {
                     for (let item of result) {
@@ -350,7 +327,7 @@ function applyQuestionAnswer(res, quu, contextObj) {
                 if (hasAnswer) {
                     handleAnswerMatched();
                 } else if (curRandomDo == 1 && curAccuracy < 100) {
-                    _w.top.unrivalWorkInfo = quu['question'] + '：未匹配到正确答案，自动全选';
+                    pushWorkLog(quu['question'] + '：未匹配到正确答案，自动全选');
                     for (let option in quu['options']) {
                         if (option === 'length') continue;
                         clickOptionByLetter(quu['options'][option]['value']);

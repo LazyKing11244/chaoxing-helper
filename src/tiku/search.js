@@ -19,6 +19,110 @@ function normalizeAiEndpoint(rawUrl) {
     return url + '/v1/chat/completions';
 }
 
+function requestAiCompletion(options) {
+    const {
+        provider,
+        apiKey,
+        rawUrl,
+        model,
+        effort,
+        messages,
+        timeout = 25000,
+        onSuccess,
+        onError
+    } = options;
+
+    let targetUrl;
+    let reqBody;
+
+    if (provider === 'custom') {
+        targetUrl = normalizeAiEndpoint(rawUrl);
+        reqBody = {
+            model: model,
+            messages: messages,
+            stream: false
+        };
+    } else {
+        targetUrl = 'https://api.deepseek.com/chat/completions';
+        reqBody = {
+            model: model,
+            messages: messages,
+            stream: false,
+            reasoning_effort: effort,
+            thinking: {
+                type: effort === 'none' ? 'disabled' : 'enabled'
+            }
+        };
+    }
+
+    const startTime = Date.now();
+
+    GM_xmlhttpRequest({
+        method: 'POST',
+        url: targetUrl,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey
+        },
+        data: JSON.stringify(reqBody),
+        timeout: timeout,
+        onload: function (res) {
+            const ms = Date.now() - startTime;
+            if (res.status >= 200 && res.status < 300) {
+                try {
+                    const json = JSON.parse(res.responseText);
+                    const msg = json.choices && json.choices[0] && json.choices[0].message;
+                    let content = (msg && msg.content) || '';
+                    if (content) {
+                        content = content.trim().replace(/^```[a-z]*\s*/i, '').replace(/```$/i, '').trim();
+                        if (content) {
+                            if (typeof onSuccess === 'function') {
+                                onSuccess({ content, ms, res });
+                            }
+                            return;
+                        }
+                    }
+                } catch (e) { }
+            }
+
+            let errMsg = '';
+            try {
+                const errJson = JSON.parse(res.responseText);
+                if (errJson.error && errJson.error.message) {
+                    errMsg = errJson.error.message;
+                }
+            } catch (e) { }
+
+            if (typeof onError === 'function') {
+                onError({
+                    status: res.status,
+                    message: errMsg || res.statusText || '请求异常',
+                    isNetworkError: false,
+                    res
+                });
+            }
+        },
+        onerror: function (err) {
+            if (typeof onError === 'function') {
+                onError({
+                    status: 0,
+                    message: (err && err.error) || '连接异常或超时',
+                    isNetworkError: true
+                });
+            }
+        },
+        ontimeout: function (err) {
+            if (typeof onError === 'function') {
+                onError({
+                    status: 0,
+                    message: (err && err.error) || '连接异常或超时',
+                    isNetworkError: true
+                });
+            }
+        }
+    });
+}
+
 function searchQuestionAnswer(quItem, callback, widParam) {
     const curToken = GM_getValue('tikutoken', '') || '';
     const currentWid = widParam || '';
@@ -94,7 +198,6 @@ function searchQuestionAnswer(quItem, callback, widParam) {
 
         if (aiProvider === 'custom') {
             const rawCustomUrl = GM_getValue('aiCustomUrl', '');
-            const customUrl = normalizeAiEndpoint(rawCustomUrl);
             const customModel = (GM_getValue('aiCustomModel', '') || '').trim();
             const customKey = (GM_getValue('aiCustomApiKey', '') || '').trim();
 
@@ -103,37 +206,24 @@ function searchQuestionAnswer(quItem, callback, widParam) {
                 return;
             }
 
-            const reqBody = {
+            requestAiCompletion({
+                provider: 'custom',
+                apiKey: customKey,
+                rawUrl: rawCustomUrl,
                 model: customModel,
                 messages: messages,
-                stream: false
-            };
-
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: customUrl,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + customKey
-                },
-                data: JSON.stringify(reqBody),
                 timeout: 25000,
-                onload: function (res) {
-                    try {
-                        const json = JSON.parse(res.responseText);
-                        const msg = json.choices && json.choices[0] && json.choices[0].message;
-                        let content = (msg && msg.content) || '';
-                        if (content) {
-                            content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
-                            content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
-                            callback({ code: 1, data: content, from: '自定义AI (' + customModel + ')' });
-                            return;
-                        }
-                    } catch (e) { }
-                    callback({ code: -1, data: '未找到答案' });
+                onSuccess: function ({ content }) {
+                    const cleanAnswer = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
+                    if (cleanAnswer) {
+                        callback({ code: 1, data: cleanAnswer, from: '自定义AI (' + customModel + ')' });
+                    } else {
+                        callback({ code: -1, data: '未找到答案' });
+                    }
                 },
-                onerror: function () { callback({ code: -1, data: '未找到答案' }); },
-                ontimeout: function () { callback({ code: -1, data: '未找到答案' }); }
+                onError: function () {
+                    callback({ code: -1, data: '未找到答案' });
+                }
             });
         } else {
             // DeepSeek 官方
@@ -153,41 +243,24 @@ function searchQuestionAnswer(quItem, callback, widParam) {
                 return;
             }
 
-            const reqBody = {
+            requestAiCompletion({
+                provider: 'deepseek',
+                apiKey: aiApiKey,
                 model: aiModel,
+                effort: aiEffort,
                 messages: messages,
-                stream: false,
-                reasoning_effort: aiEffort,
-                thinking: {
-                    type: aiEffort === 'none' ? 'disabled' : 'enabled'
-                }
-            };
-
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: 'https://api.deepseek.com/chat/completions',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + aiApiKey
-                },
-                data: JSON.stringify(reqBody),
                 timeout: 25000,
-                onload: function (res) {
-                    try {
-                        const json = JSON.parse(res.responseText);
-                        const msg = json.choices && json.choices[0] && json.choices[0].message;
-                        let content = (msg && msg.content) || '';
-                        if (content) {
-                            content = content.trim().replace(/^\`\`\`[a-z]*\s*/i, '').replace(/\`\`\`$/i, '').trim();
-                            content = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
-                            callback({ code: 1, data: content, from: 'DeepSeek (' + aiModel + ')' });
-                            return;
-                        }
-                    } catch (e) { }
-                    callback({ code: -1, data: '未找到答案' });
+                onSuccess: function ({ content }) {
+                    const cleanAnswer = content.replace(/^(答|答案|标准答案|正确答案)[:：\s]*/i, '').trim();
+                    if (cleanAnswer) {
+                        callback({ code: 1, data: cleanAnswer, from: 'DeepSeek (' + aiModel + ')' });
+                    } else {
+                        callback({ code: -1, data: '未找到答案' });
+                    }
                 },
-                onerror: function () { callback({ code: -1, data: '未找到答案' }); },
-                ontimeout: function () { callback({ code: -1, data: '未找到答案' }); }
+                onError: function () {
+                    callback({ code: -1, data: '未找到答案' });
+                }
             });
         }
     }
